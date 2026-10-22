@@ -421,10 +421,10 @@ EOF
 }
 
 @test "privileged Trash staging never uses world-writable Library Caches" {
-    run grep -nF '/Library/Caches/.mole-trash' "$PROJECT_ROOT/lib/core/file_ops.sh"
+    run grep -nF '/Library/Caches/.mole-trash' "$PROJECT_ROOT/lib/core/file_ops_trash.sh"
     [ "$status" -ne 0 ]
 
-    run grep -nF 'stage_root="/Library/MoleTrashStaging"' "$PROJECT_ROOT/lib/core/file_ops.sh"
+    run grep -nF 'stage_root="/Library/MoleTrashStaging"' "$PROJECT_ROOT/lib/core/file_ops_trash.sh"
     [ "$status" -eq 0 ]
 }
 
