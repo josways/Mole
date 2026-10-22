@@ -17,6 +17,9 @@ readonly MOLE_BASE_LOADED=1
 # once here rather than at each read site; entry points still assign over it.
 : "${DRY_RUN:=false}"
 
+# shellcheck source=lib/core/paths.sh
+source "${BASH_SOURCE[0]%/*}/paths.sh"
+
 # ============================================================================
 # Color Definitions
 # ANSI escapes are emitted only when nothing rules them out, in this order:
@@ -460,7 +463,9 @@ load_mole_whitelist() {
     WHITELIST_PATTERNS=()
     WHITELIST_WARNINGS=()
 
-    local whitelist_file="$MOLE_USER_HOME/.config/mole/whitelist"
+    local whitelist_file
+    mole_user_path_into whitelist_file config "$MOLE_USER_HOME" || return 1
+    whitelist_file="$whitelist_file/whitelist"
     local whitelist_state=0
     mole_whitelist_file_state "$whitelist_file" || whitelist_state=$?
     [[ $whitelist_state -ne 2 ]] || return 1

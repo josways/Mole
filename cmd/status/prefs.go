@@ -16,6 +16,8 @@ import (
 	"strings"
 
 	"golang.org/x/sys/unix"
+
+	"github.com/tw93/mole/internal/userpaths"
 )
 
 // getConfigPath returns the path to the status preferences file, or "" if the
@@ -25,7 +27,7 @@ func getConfigPath() string {
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".config", "mole", "status_prefs")
+	return filepath.Join(userpaths.ForHome(home).Config, "status_prefs")
 }
 
 // loadPrefs reads the preferences file into a map. A missing or unreadable file
@@ -117,7 +119,7 @@ func writePrefsAtomically(path string, data []byte) error {
 	tempPath := temp.Name()
 	defer os.Remove(tempPath)
 
-	if err := temp.Chmod(0o644); err != nil {
+	if err := temp.Chmod(0o600); err != nil {
 		_ = temp.Close()
 		return err
 	}

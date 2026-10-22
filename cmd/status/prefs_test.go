@@ -10,6 +10,37 @@ import (
 	"time"
 )
 
+func TestPrefsAtomicWriteFailurePreservesDestination(t *testing.T) {
+	dir := t.TempDir()
+	destination := filepath.Join(dir, "preferences")
+	if err := os.Mkdir(destination, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(destination, "keep")
+	if err := os.WriteFile(marker, []byte("retained"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := writePrefsAtomically(destination, []byte("new=value\n")); err == nil {
+		t.Fatal("rename failure reported success")
+	}
+	if data, err := os.ReadFile(marker); err != nil || string(data) != "retained" {
+		t.Fatalf("failed write changed destination: %q %v", data, err)
+	}
+	matches, err := filepath.Glob(filepath.Join(dir, ".status_prefs.*"))
+	if err != nil || len(matches) != 0 {
+		t.Fatalf("failed write leaked staging files: %v %v", matches, err)
+	}
+}
+
+func TestPrefsArePrivate(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	savePref("cat_hidden", "true")
+	info, err := os.Stat(getConfigPath())
+	if err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("preferences file is not private: %v", err)
+	}
+}
+
 // TestSavePrefPreservesOtherKeys is the whole point of the refactor: writing one
 // preference must not clobber another. The previous single-string store failed
 // exactly this scenario. t.Setenv redirects HOME to a temp dir so getConfigPath

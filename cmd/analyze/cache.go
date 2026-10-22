@@ -20,6 +20,8 @@ import (
 	"time"
 
 	"github.com/cespare/xxhash/v2"
+
+	"github.com/tw93/mole/internal/userpaths"
 )
 
 // cacheSchemaVersion is bumped whenever directory-size semantics change so
@@ -251,9 +253,9 @@ func persistOverviewSnapshotLocked() error {
 		return err
 	}
 	tmpPath := tmp.Name()
-	// Chmod through the handle, not the path: CreateTemp opens at 0600 and the
-	// store has always been world-readable.
-	if err := tmp.Chmod(0644); err != nil {
+	// Measurements contain user paths. Keep new/replaced payloads private,
+	// applying permissions through the open handle rather than the pathname.
+	if err := tmp.Chmod(0o600); err != nil {
 		tmp.Close() //nolint:errcheck
 		_ = os.Remove(tmpPath)
 		return err
@@ -292,7 +294,7 @@ func loadOverviewCachedMeasurement(path string) (int64, scanState, error) {
 // moleCacheRoot is the single definition of the shared cache location; both
 // accessors below build on it so the layout is stated once.
 func moleCacheRoot(home string) string {
-	return filepath.Join(home, ".cache", "mole")
+	return userpaths.ForHome(home).Cache
 }
 
 // getMoleCacheRoot is the shared `~/.cache/mole` directory. The shell side
@@ -591,20 +593,27 @@ func loadRawCacheFromDisk(path string) (*cacheEntry, error) {
 	}
 	defer file.Close() //nolint:errcheck
 
-	var entry cacheEntry
-	decoder := gob.NewDecoder(file)
-	if err := decoder.Decode(&entry); err != nil {
+	entry, err := decodeCacheEntry(file)
+	if err != nil {
 		// A truncated or foreign payload will never decode; keeping it only
 		// costs a block until some prune pass reaches it.
 		_ = os.Remove(cachePath)
 		return nil, err
 	}
 
+	return entry, nil
+}
+
+// Decode separately from eviction so hostile/truncated payloads can be fuzzed
+// through the production parser without writing a cache file for each input.
+func decodeCacheEntry(reader io.Reader) (*cacheEntry, error) {
+	var entry cacheEntry
+	if err := gob.NewDecoder(reader).Decode(&entry); err != nil {
+		return nil, err
+	}
 	if entry.SchemaVersion != cacheSchemaVersion {
-		_ = os.Remove(cachePath)
 		return nil, fmt.Errorf("cache schema mismatch: got %d, want %d", entry.SchemaVersion, cacheSchemaVersion)
 	}
-
 	return &entry, nil
 }
 
@@ -719,7 +728,7 @@ func saveCacheToDiskWithOptions(publication *scanPublication, path string, resul
 		return err
 	}
 	tmpPath := tmp.Name()
-	if err := tmp.Chmod(0644); err != nil {
+	if err := tmp.Chmod(0o600); err != nil {
 		tmp.Close() //nolint:errcheck
 		_ = os.Remove(tmpPath)
 		return err

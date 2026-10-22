@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/tw93/mole/internal/userpaths"
 )
 
 // deleteAudit writes one analyze delete batch into the logs the shell side
@@ -48,7 +50,7 @@ func moleLogDir() (string, bool) {
 	if home == "" {
 		return "", false
 	}
-	return filepath.Join(home, "Library", "Logs", "mole"), true
+	return userpaths.ForHome(home).Logs, true
 }
 
 func operationsLogPath() (string, bool) {

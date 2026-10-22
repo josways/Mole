@@ -18,9 +18,11 @@ source "$_MOLE_MANAGE_DIR/../ui/menu_simple.sh"
 source "$_MOLE_MANAGE_DIR/../optimize/catalog.sh"
 
 # Config file paths
-readonly WHITELIST_CONFIG_CLEAN="$HOME/.config/mole/whitelist"
-readonly WHITELIST_CONFIG_OPTIMIZE="$HOME/.config/mole/whitelist_optimize"
-readonly WHITELIST_CONFIG_OPTIMIZE_LEGACY="$HOME/.config/mole/whitelist_checks"
+mole_user_path_into WHITELIST_CONFIG_CLEAN config
+readonly WHITELIST_CONFIG_OPTIMIZE="$WHITELIST_CONFIG_CLEAN/whitelist_optimize"
+readonly WHITELIST_CONFIG_OPTIMIZE_LEGACY="$WHITELIST_CONFIG_CLEAN/whitelist_checks"
+WHITELIST_CONFIG_CLEAN="$WHITELIST_CONFIG_CLEAN/whitelist"
+readonly WHITELIST_CONFIG_CLEAN
 
 # Default / safety whitelist patterns defined in lib/core/base.sh:
 # - DEFAULT_WHITELIST_PATTERNS
