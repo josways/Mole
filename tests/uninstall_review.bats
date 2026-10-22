@@ -367,6 +367,40 @@ SH
     [[ "$output" == *", including personal data"* ]] || { echo "$output"; return 1; }
 }
 
+@test "--with-data holds back CrossOver, Whisky and OpenEmu game libraries" {
+    run env HOME="$HOME/with-data-games" PROJECT_ROOT="$PROJECT_ROOT" /bin/bash --noprofile --norc <<'SH'
+set -euo pipefail
+source "$PROJECT_ROOT/lib/core/common.sh"
+source "$PROJECT_ROOT/lib/ui/menu_paginated.sh"
+source "$PROJECT_ROOT/lib/uninstall/batch.sh"
+bottles="$HOME/Library/Application Support/CrossOver"
+whisky="$HOME/Library/Containers/com.isaacmarovitz.Whisky"
+roms="$HOME/Library/Application Support/OpenEmu"
+prefs="$HOME/Library/Preferences/com.codeweavers.CrossOver.plist"
+app="$HOME/Applications/CrossOver.app"
+mkdir -p "$bottles/Bottles/Steam" "$whisky/Bottles" "$roms/Game Library" "$app" "$HOME/Library/Preferences"
+touch "$prefs"
+encoded=$(printf '%s\n' "$bottles" "$whisky" "$roms" "$prefs" | base64 | tr -d '\n')
+app_details=("CrossOver|$app|com.codeweavers.CrossOver|12|$encoded||true|false|false|||||none||||")
+running_apps=() sudo_apps=() brew_cask_apps=() leftover_notes=()
+total_estimated_size=12
+get_path_size_kb() { printf '10\n'; }
+calculate_total_size() { if [[ -n "$1" ]]; then printf '1\n'; else printf '0\n'; fi; }
+drain_pending_input() { :; }
+paginated_multi_select() { return 9; }
+MOLE_UNINSTALL_WITH_DATA=1 MOLE_DRY_RUN=1 MOLE_TEST_MODE=1 _batch_preview_and_confirm <<< ''
+IFS='|' read -r _ _ _ _ result _ <<< "${app_details[0]}"
+files=$(decode_file_list "$result" CrossOver)
+[[ "$files" == *"$prefs"* ]] || exit 1
+[[ "$files" != *"$bottles"* ]] || exit 1
+[[ "$files" != *"$whisky"* ]] || exit 1
+[[ "$files" != *"$roms"* ]] || exit 1
+SH
+    [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+    local kept="${output##*Personal data kept:}"
+    [[ "$kept" == *"CrossOver"* && "$kept" == *"Whisky"* && "$kept" == *"OpenEmu"* ]] || { echo "$output"; return 1; }
+}
+
 run_non_tty_confirmation() {
     local input_mode="$1" dry_run="${2:-0}" expected_rc=3 expected_text='interactive terminal'
     if [[ "$dry_run" == 1 ]]; then

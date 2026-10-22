@@ -18,13 +18,19 @@ _uninstall_disposable_leftover() {
 # the CLI cannot prove that no other installed app claims an App Group
 # container. Profile roots the uninstall scan can offer (the Chromium vendors'
 # entries also cover their Beta, Dev and Canary channels) and everything below
-# them, compared case-insensitively because APFS folds case.
+# them, compared case-insensitively because APFS folds case. Game and ROM
+# libraries that sit inside one app's data root stay unselected too: CrossOver
+# and Whisky bottles hold installed Windows games, OpenEmu holds ROMs and saves.
 _uninstall_data_preselect_holdback() {
     local path home
     mole_ascii_lowercase path "$1"
     mole_ascii_lowercase home "$HOME"
     case "$path" in
         "$home/library/group containers/"*) return 0 ;;
+        "$home/library/containers/com.isaacmarovitz.whisky" | \
+            "$home/library/containers/com.isaacmarovitz.whisky/"*)
+            return 0
+            ;;
     esac
     local support="$home/library/application support"
     case "$path" in
@@ -34,7 +40,9 @@ _uninstall_data_preselect_holdback() {
             "$support/vivaldi" | "$support/vivaldi/"* | \
             "$support/arc" | "$support/arc/"* | \
             "$support/firefox" | "$support/firefox/"* | \
-            "$support/zen" | "$support/zen/"*)
+            "$support/zen" | "$support/zen/"* | \
+            "$support/crossover" | "$support/crossover/"* | \
+            "$support/openemu" | "$support/openemu/"*)
             return 0
             ;;
     esac
