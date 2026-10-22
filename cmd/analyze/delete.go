@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -35,6 +36,8 @@ const trashTimeout = 30 * time.Second
 // Finder fallback.
 const trashBinary = "/usr/bin/trash"
 
+type trashRoute func(string) error
+
 func deletePathCmd(path string, counter *int64, audit *deleteAudit) tea.Cmd {
 	return func() tea.Msg {
 		audit.begin()
@@ -53,20 +56,24 @@ func deletePathCmd(path string, counter *int64, audit *deleteAudit) tea.Cmd {
 
 // deleteMultiplePathsCmd moves paths to Trash and aggregates results.
 func deleteMultiplePathsCmd(paths []string, counter *int64, audit *deleteAudit) tea.Cmd {
+	return deleteMultiplePathsUsing(paths, counter, audit, trashPathWithProgress)
+}
+
+func deleteMultiplePathsUsing(paths []string, counter *int64, audit *deleteAudit, move func(string, *int64) (int64, error)) tea.Cmd {
 	return func() tea.Msg {
 		var totalCount int64
-		var errors []string
+		var failures []string
 		var removedPaths []string
 		audit.begin()
 
 		// Process deeper paths first to avoid parent/child conflicts.
 		pathsToDelete := append([]string(nil), paths...)
-		sort.Slice(pathsToDelete, func(i, j int) bool {
+		sort.SliceStable(pathsToDelete, func(i, j int) bool {
 			return strings.Count(pathsToDelete[i], string(filepath.Separator)) > strings.Count(pathsToDelete[j], string(filepath.Separator))
 		})
 
 		for _, path := range pathsToDelete {
-			count, err := trashPathWithProgress(path, counter)
+			count, err := move(path, counter)
 			audit.record(path, err)
 			totalCount += count
 			if err != nil {
@@ -74,15 +81,18 @@ func deleteMultiplePathsCmd(paths []string, counter *int64, audit *deleteAudit) 
 					removedPaths = append(removedPaths, path)
 					continue
 				}
-				errors = append(errors, err.Error())
+				failures = append(failures, err.Error())
+				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+					break
+				}
 				continue
 			}
 			removedPaths = append(removedPaths, path)
 		}
 
 		var resultErr error
-		if len(errors) > 0 {
-			resultErr = &multiDeleteError{errors: errors}
+		if len(failures) > 0 {
+			resultErr = &multiDeleteError{errors: failures}
 		}
 		audit.end()
 
@@ -136,6 +146,12 @@ func trashPathWithProgress(root string, counter *int64) (int64, error) {
 // trash(8); older supported systems use an atomic, no-overwrite move into the
 // correct per-volume Trash. Finder is only the final compatibility fallback.
 func moveToTrash(path string) error {
+	return moveToTrashWithRoutes(path, moveToTrashViaBinary, moveToTrashViaFilesystem, moveToTrashViaFinder)
+}
+
+// Keep fallback orchestration separate from the platform transports so failure
+// contracts can be exercised without invoking Finder or touching a real Trash.
+func moveToTrashWithRoutes(path string, routes ...trashRoute) error {
 	// Validate raw input before Abs resolves ".." components away.
 	if err := validateTrashTarget(path); err != nil {
 		return err
@@ -150,15 +166,44 @@ func moveToTrash(path string) error {
 	if err := validateTrashTarget(absPath); err != nil {
 		return err
 	}
-
-	if trashErr := moveToTrashViaBinary(absPath); trashErr == nil {
-		return nil
+	target, err := os.Lstat(absPath)
+	if err != nil {
+		return err
 	}
-	if filesystemErr := moveToTrashViaFilesystem(absPath); filesystemErr == nil {
-		return nil
+	parentPath, err := filepath.EvalSymlinks(filepath.Dir(absPath))
+	if err != nil {
+		return err
+	}
+	parent, err := os.Stat(parentPath)
+	if err != nil {
+		return err
 	}
 
-	return moveToTrashViaFinder(absPath)
+	routeErr := errors.New("no Trash transport available")
+	for _, route := range routes {
+		// A failed transport is not authority to move whatever now occupies
+		// the original pathname. Rebind both physical parent and leaf before
+		// each fallback, and repeat the deny policy after slow external work.
+		currentParentPath, parentErr := filepath.EvalSymlinks(filepath.Dir(absPath))
+		currentParent, statErr := os.Stat(filepath.Dir(absPath))
+		currentTarget, targetErr := os.Lstat(absPath)
+		if parentErr != nil || statErr != nil || targetErr != nil ||
+			currentParentPath != parentPath || !os.SameFile(parent, currentParent) ||
+			!os.SameFile(target, currentTarget) || target.Mode() != currentTarget.Mode() {
+			return fmt.Errorf("trash target or parent changed; refresh and select it again: %s", absPath)
+		}
+		if err := validateTrashTarget(absPath); err != nil {
+			return err
+		}
+		routeErr = route(absPath)
+		if routeErr == nil {
+			return nil
+		}
+		if errors.Is(routeErr, context.Canceled) || errors.Is(routeErr, context.DeadlineExceeded) {
+			return routeErr
+		}
+	}
+	return routeErr
 }
 
 // moveToTrashViaBinary moves absPath to Trash using trash(8). Returns an error
@@ -175,7 +220,7 @@ func moveToTrashViaBinary(absPath string) error {
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
-			return fmt.Errorf("timeout moving to Trash")
+			return fmt.Errorf("timeout moving to Trash: %w", ctx.Err())
 		}
 		return fmt.Errorf("failed to move to Trash: %s", strings.TrimSpace(string(output)))
 	}
@@ -298,7 +343,7 @@ func moveToTrashViaFinder(absPath string) error {
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
-			return fmt.Errorf("timeout moving to Trash")
+			return fmt.Errorf("timeout moving to Trash: %w", ctx.Err())
 		}
 		return fmt.Errorf("failed to move to Trash: %s", strings.TrimSpace(string(output)))
 	}
