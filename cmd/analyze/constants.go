@@ -38,6 +38,7 @@ const (
 	analyzerCacheMaxEntries = 5000
 	analyzerCacheMaxBytes   = 50 << 20
 	cacheDirReadBatch       = 512
+	cachePayloadMaxBytes    = 8 << 20
 	legacySweepWorkers      = 4
 	staleTempFileTTL        = time.Hour
 

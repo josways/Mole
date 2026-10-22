@@ -250,6 +250,7 @@ func scanPathConcurrentAllEntries(ctx context.Context, root string, filesScanned
 }
 
 func scanPathConcurrentWithOptions(ctx context.Context, root string, filesScanned, dirsScanned, bytesScanned *int64, currentPath *atomic.Value, useSpotlight bool, entryLimit int) (scanResult, error) {
+	defer pruneCurrentAnalyzerCache()
 	return scanPathConcurrentWithLimiter(ctx, root, filesScanned, dirsScanned, bytesScanned, currentPath, useSpotlight, entryLimit, nil, scanCacheReuse, newScanPublication(ctx, nil))
 }
 

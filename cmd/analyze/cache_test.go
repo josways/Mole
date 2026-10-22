@@ -3,12 +3,16 @@
 package main
 
 import (
+	"context"
 	"encoding/gob"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -651,5 +655,265 @@ func TestGetCacheDirIsAnalyzerScoped(t *testing.T) {
 	}
 	if _, err := os.Stat(cacheDir); err != nil {
 		t.Fatalf("expected cache dir to be created: %v", err)
+	}
+}
+
+func TestDirectoryScanPrunesCacheAfterCompletion(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	cacheDir, err := getCacheDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stale := filepath.Join(cacheDir, "expired.cache")
+	if err := os.WriteFile(stale, []byte("expired"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-8 * 24 * time.Hour)
+	if err := os.Chtimes(stale, old, old); err != nil {
+		t.Fatal(err)
+	}
+	target := t.TempDir()
+	var files, dirs, size int64
+	current := &atomic.Value{}
+	current.Store("")
+	if _, err := scanPathConcurrentAllEntries(context.Background(), target, &files, &dirs, &size, current); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(stale); !os.IsNotExist(err) {
+		t.Fatalf("completed scan left expired cache: %v", err)
+	}
+}
+
+func TestCachePayloadRejectsOversizedAndNonregularFiles(t *testing.T) {
+	dir := t.TempDir()
+	huge := filepath.Join(dir, "huge.cache")
+	f, err := os.Create(huge)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Truncate(cachePayloadMaxBytes + 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	fifo := filepath.Join(dir, "fifo.cache")
+	if err := syscall.Mkfifo(fifo, 0600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "link.cache")
+	if err := os.Symlink(huge, link); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{huge, fifo, dir, link} {
+		if _, err := readCachePayload(path); err == nil {
+			t.Errorf("accepted %s", path)
+		}
+	}
+}
+
+func TestLiveScanCompletionPrunesAfterItsRootCacheWrite(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	cacheDir, err := getCacheDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stale := filepath.Join(cacheDir, "expired.cache")
+	if err := os.WriteFile(stale, []byte("expired"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-8 * 24 * time.Hour)
+	if err := os.Chtimes(stale, old, old); err != nil {
+		t.Fatal(err)
+	}
+	path := t.TempDir()
+	m := newModel(path, false)
+	defer m.cancelBackgroundCacheWrites(nil)
+	m.finishLiveScan(scanResult{State: scanComplete, TotalSize: 1})
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(stale); os.IsNotExist(err) {
+			cachePath, err := getCachePath(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := os.Stat(cachePath); err != nil {
+				t.Fatalf("maintenance ran before root save: %v", err)
+			}
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("live scan left expired cache after completion")
+}
+
+func TestCancelCacheWriteDoesNotWaitForMaintenance(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	dir, err := getCacheDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := t.TempDir()
+	ctx, cancel := context.WithCancel(context.Background())
+	publication := newScanPublication(ctx, cancel)
+	done := make(chan error, 1)
+	analyzerCacheMu.Lock()
+	locked := true
+	defer func() {
+		if locked {
+			analyzerCacheMu.Unlock()
+		}
+	}()
+	go func() {
+		done <- saveCacheToDiskWithOptions(publication, target, scanResult{State: scanComplete, TotalSize: 1}, false)
+	}()
+	deadline := time.Now().Add(3 * time.Second)
+	staged := false
+	for time.Now().Before(deadline) {
+		matches, err := filepath.Glob(filepath.Join(dir, "entry-*.tmp"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(matches) > 0 {
+			staged = true
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !staged {
+		t.Fatal("writer did not reach staging")
+	}
+	canceled := make(chan struct{})
+	go func() { publication.cancel(); close(canceled) }()
+	select {
+	case <-canceled:
+	case <-time.After(time.Second):
+		analyzerCacheMu.Unlock()
+		locked = false
+		<-canceled
+		<-done
+		t.Fatal("cancellation waited on cache maintenance")
+	}
+	analyzerCacheMu.Unlock()
+	locked = false
+	if err := <-done; !errors.Is(err, context.Canceled) {
+		t.Fatalf("write after cancel: %v", err)
+	}
+	path, err := getCachePath(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("canceled cache published: %v", err)
+	}
+}
+
+func TestCacheMaintenanceRefusesSymlinkRoots(t *testing.T) {
+	for _, legacy := range []bool{false, true} {
+		t.Run(fmt.Sprintf("legacy-%v", legacy), func(t *testing.T) {
+			target := t.TempDir()
+			victim := filepath.Join(target, "keep.cache")
+			if err := os.WriteFile(victim, []byte("keep"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			old := time.Now().Add(-8 * 24 * time.Hour)
+			if err := os.Chtimes(victim, old, old); err != nil {
+				t.Fatal(err)
+			}
+			link := filepath.Join(t.TempDir(), "cache")
+			if err := os.Symlink(target, link); err != nil {
+				t.Fatal(err)
+			}
+			var err error
+			if legacy {
+				err = sweepLegacyAnalyzerCache(link)
+			} else {
+				err = pruneAnalyzerCacheDir(link, time.Now())
+			}
+			if err == nil {
+				t.Error("accepted a symlink cache root")
+			}
+			if data, err := os.ReadFile(victim); err != nil || string(data) != "keep" {
+				t.Fatalf("changed target outside cache: %q %v", data, err)
+			}
+		})
+	}
+}
+
+func TestCacheUnlinkStaysInOpenedDirectoryAfterReplacement(t *testing.T) {
+	parent := t.TempDir()
+	root := filepath.Join(parent, "analyzer")
+	moved := filepath.Join(parent, "original")
+	other := t.TempDir()
+	for _, dir := range []string{root, other} {
+		if err := os.MkdirAll(dir, 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "entry.cache"), []byte("keep"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	dir, err := openCacheMaintenanceDir(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dir.Close() //nolint:errcheck
+	if err := os.Rename(root, moved); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(other, root); err != nil {
+		t.Fatal(err)
+	}
+	if err := removeCacheFile(dir, "entry.cache"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(moved, "entry.cache")); !os.IsNotExist(err) {
+		t.Fatalf("original entry not pruned: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(other, "entry.cache")); err != nil {
+		t.Fatalf("followed replacement symlink: %v", err)
+	}
+	if err := removeCacheFile(dir, "../entry.cache"); err == nil {
+		t.Fatal("accepted a parent traversal")
+	}
+}
+
+func TestCacheDirectoryRejectsPreexistingSymlink(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	root := filepath.Join(home, ".cache", "mole", "analyzer")
+	if err := os.MkdirAll(filepath.Dir(root), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(t.TempDir(), root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := getCacheDir(); err == nil {
+		t.Fatal("accepted a symlink analyzer directory")
+	}
+}
+
+func TestCacheInvalidationRefusesReplacedSymlinkRoot(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	target := t.TempDir()
+	cachePath, err := getCachePath(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cacheDir := filepath.Dir(cachePath)
+	other := t.TempDir()
+	victim := filepath.Join(other, filepath.Base(cachePath))
+	if err := os.WriteFile(victim, []byte("keep"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(cacheDir, cacheDir+"-original"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(other, cacheDir); err != nil {
+		t.Fatal(err)
+	}
+	removeCacheEntry(target)
+	if data, err := os.ReadFile(victim); err != nil || string(data) != "keep" {
+		t.Fatalf("invalidation followed replacement: %q %v", data, err)
 	}
 }

@@ -280,6 +280,7 @@ func (m *model) finishLiveScan(result scanResult) {
 	}
 	go func(path string, scan scanResult) {
 		_ = saveCacheToDiskWithOptions(publication, path, scan, false)
+		pruneCurrentAnalyzerCache()
 	}(m.path, result)
 	m.status = scanSummary(m.totalSize, m.scanState)
 }

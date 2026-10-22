@@ -17,9 +17,11 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/cespare/xxhash/v2"
+	"golang.org/x/sys/unix"
 
 	"github.com/tw93/mole/internal/userpaths"
 )
@@ -46,6 +48,7 @@ type overviewSizeSnapshot struct {
 }
 
 var (
+	analyzerCacheMu        sync.Mutex
 	overviewSnapshotMu     sync.Mutex
 	overviewSnapshotCache  map[string]overviewSizeSnapshot
 	overviewSnapshotLoaded bool
@@ -104,7 +107,7 @@ func ensureOverviewSnapshotCacheLocked() error {
 	if err != nil {
 		return err
 	}
-	data, err := os.ReadFile(storePath)
+	data, err := readCachePayload(storePath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			overviewSnapshotCache = make(map[string]overviewSizeSnapshot)
@@ -339,6 +342,10 @@ func getCacheDir() (string, error) {
 	resolved := &resolvedCacheDir{home: home, dir: dir}
 	if mkErr := os.MkdirAll(dir, 0755); mkErr != nil {
 		resolved.dir, resolved.err = "", mkErr
+	} else if info, err := os.Lstat(dir); err != nil {
+		resolved.dir, resolved.err = "", err
+	} else if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		resolved.dir, resolved.err = "", fmt.Errorf("analyzer cache is not a physical directory")
 	}
 	cachedAnalyzerDir.Store(resolved)
 	return resolved.dir, resolved.err
@@ -381,7 +388,12 @@ func shouldPersistSubdirCache(result scanResult) bool {
 // a scan, so it stays a single unlink.
 func removeCacheEntry(path string) {
 	if cachePath, err := getCachePath(path); err == nil {
-		_ = os.Remove(cachePath)
+		dir, err := openCacheMaintenanceDir(filepath.Dir(cachePath))
+		if err != nil {
+			return
+		}
+		defer dir.Close() //nolint:errcheck
+		_ = removeCacheFile(dir, filepath.Base(cachePath))
 	}
 }
 
@@ -415,11 +427,31 @@ func pruneAnalyzerCache() {
 	if root, err := getMoleCacheRoot(); err == nil {
 		_ = sweepLegacyAnalyzerCache(root)
 	}
-	cacheDir, err := getCacheDir()
-	if err != nil {
-		return
+	pruneCurrentAnalyzerCache()
+}
+
+// Keep maintenance bound to the opened directory, even if its pathname is
+// renamed or replaced during enumeration. Never traverse a cache-root symlink.
+func openCacheMaintenanceDir(path string) (*os.File, error) {
+	return os.OpenFile(path, os.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
+}
+
+func removeCacheFile(dir *os.File, name string) error {
+	if name == "" || name == "." || name == ".." || filepath.Base(name) != name {
+		return fmt.Errorf("cache entry is not a direct child")
 	}
-	_ = pruneAnalyzerCacheDir(cacheDir, time.Now())
+	return unix.Unlinkat(int(dir.Fd()), name, 0)
+}
+
+// Only top-level scan completion requests maintenance. Recursive cache saves
+// never scan the store; serialize pruning with this process's atomic renames.
+func pruneCurrentAnalyzerCache() {
+	analyzerCacheMu.Lock()
+	defer analyzerCacheMu.Unlock()
+	cacheDir, err := getCacheDir()
+	if err == nil {
+		_ = pruneAnalyzerCacheDir(cacheDir, time.Now())
+	}
 }
 
 // pruneAnalyzerCacheDir removes expired entries and then enforces the count and
@@ -438,7 +470,7 @@ func pruneAnalyzerCacheDirWithLimits(cacheDir string, now time.Time, maxEntries 
 		return nil
 	}
 
-	dir, err := os.Open(cacheDir)
+	dir, err := openCacheMaintenanceDir(cacheDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
@@ -457,7 +489,7 @@ func pruneAnalyzerCacheDirWithLimits(cacheDir string, now time.Time, maxEntries 
 		}
 		oldest := heap.Pop(retained).(cacheFileStat)
 		retainedBytes -= oldest.size
-		_ = os.Remove(filepath.Join(cacheDir, oldest.name))
+		_ = removeCacheFile(dir, oldest.name)
 	}
 
 	tempCutoff := now.Add(-staleTempFileTTL)
@@ -473,7 +505,7 @@ func pruneAnalyzerCacheDirWithLimits(cacheDir string, now time.Time, maxEntries 
 			if filepath.Ext(entry.Name()) == ".tmp" {
 				if info, infoErr := entry.Info(); infoErr == nil &&
 					info.Mode().IsRegular() && !info.ModTime().After(tempCutoff) {
-					_ = os.Remove(filepath.Join(cacheDir, entry.Name()))
+					_ = removeCacheFile(dir, entry.Name())
 				}
 				continue
 			}
@@ -486,7 +518,7 @@ func pruneAnalyzerCacheDirWithLimits(cacheDir string, now time.Time, maxEntries 
 				continue
 			}
 			if !info.ModTime().After(cutoff) {
-				_ = os.Remove(filepath.Join(cacheDir, entry.Name()))
+				_ = removeCacheFile(dir, entry.Name())
 				continue
 			}
 
@@ -535,7 +567,7 @@ func sweepLegacyAnalyzerCache(root string) error {
 		return nil
 	}
 
-	dir, err := os.Open(root)
+	dir, err := openCacheMaintenanceDir(root)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
@@ -549,7 +581,7 @@ func sweepLegacyAnalyzerCache(root string) error {
 	for range legacySweepWorkers {
 		workers.Go(func() {
 			for name := range names {
-				_ = os.Remove(filepath.Join(root, name))
+				_ = removeCacheFile(dir, name)
 			}
 		})
 	}
@@ -587,21 +619,54 @@ func loadRawCacheFromDisk(path string) (*cacheEntry, error) {
 		return nil, err
 	}
 
-	file, err := os.Open(cachePath)
+	file, err := openCachePayload(cachePath)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close() //nolint:errcheck
-
-	entry, err := decodeCacheEntry(file)
+	entry, err := decodeCacheEntry(io.LimitReader(file, cachePayloadMaxBytes+1))
 	if err != nil {
 		// A truncated or foreign payload will never decode; keeping it only
 		// costs a block until some prune pass reaches it.
-		_ = os.Remove(cachePath)
+		removeCacheEntry(path)
 		return nil, err
 	}
 
 	return entry, nil
+}
+
+// A disposable cache must not consume unbounded memory before validation.
+// Check both the opened file and the bytes read (the file may grow meanwhile).
+func openCachePayload(path string) (*os.File, error) {
+	file, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, err
+	}
+	info, err := file.Stat()
+	if err == nil && (!info.Mode().IsRegular() || info.Size() > cachePayloadMaxBytes) {
+		err = fmt.Errorf("cache payload is not a bounded regular file")
+	}
+	if err != nil {
+		_ = file.Close()
+		return nil, err
+	}
+	return file, nil
+}
+
+func readCachePayload(path string) ([]byte, error) {
+	file, err := openCachePayload(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close() //nolint:errcheck
+	data, err := io.ReadAll(io.LimitReader(file, cachePayloadMaxBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > cachePayloadMaxBytes {
+		return nil, fmt.Errorf("cache payload exceeds size limit")
+	}
+	return data, nil
 }
 
 // Decode separately from eviction so hostile/truncated payloads can be fuzzed
@@ -742,9 +807,11 @@ func saveCacheToDiskWithOptions(publication *scanPublication, path string, resul
 		_ = os.Remove(tmpPath)
 		return err
 	}
-	err = publication.commit(func() error {
-		return os.Rename(tmpPath, cachePath)
-	})
+	// Never hold the publication gate while waiting for housekeeping: cancel
+	// must remain immediate even when a large legacy store is being pruned.
+	analyzerCacheMu.Lock()
+	err = publication.commit(func() error { return os.Rename(tmpPath, cachePath) })
+	analyzerCacheMu.Unlock()
 	if err != nil {
 		_ = os.Remove(tmpPath)
 		return err

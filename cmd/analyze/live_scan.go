@@ -254,6 +254,11 @@ func runLiveScan(
 	cachePolicy scanCachePolicy,
 ) {
 	defer stream.close()
+	defer func() {
+		if ctx.Err() != nil {
+			pruneCurrentAnalyzerCache()
+		}
+	}()
 
 	entriesByPath := make(map[string]dirEntry, len(initial.Entries))
 	for _, entry := range initial.Entries {
