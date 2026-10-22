@@ -33,18 +33,8 @@ source "$_MOLE_CORE_DIR/app_protection_data.sh"
 # Return 0 when Xcode/build tooling is active, 1 after reliable no-match
 # results, and 2 when process ownership cannot be established.
 xcode_build_tooling_process_state() {
-    command -v pgrep > /dev/null 2>&1 || return 2
-
-    local process probe_status
-    for process in Xcode xcodebuild xctest XCTRunner XCBBuildService swift-frontend; do
-        if pgrep -x "$process" > /dev/null 2>&1; then
-            return 0
-        else
-            probe_status=$?
-            [[ $probe_status -eq 1 ]] || return 2
-        fi
-    done
-    return 1
+    mole_pgrep_any -x Xcode -x xcodebuild -x xctest -x XCTRunner \
+        -x XCBBuildService -x swift-frontend
 }
 
 # Centralized check for critical system components (case-insensitive).

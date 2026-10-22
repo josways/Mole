@@ -69,24 +69,31 @@ unset mole_color
 #   mole_pgrep_any -x Xcode -f com.apple.dt.XCTest
 # Returns 0 when any pattern matches, 1 only when every probe reports no match,
 # and 2 when no pattern matches but at least one probe could not be completed.
+# pgrep reads each pattern as an extended regex, so the patterns of one
+# selector join with | into a single probe; -x still anchors the whole name.
+# A pgrep per pattern cost about 16ms each in per-item delete guards.
 mole_pgrep_any() {
     if [[ $# -eq 0 || $(($# % 2)) -ne 0 ]] || ! command -v pgrep > /dev/null 2>&1; then
         return 2
     fi
 
-    local aggregate_rc=1
-    local selector pattern probe_rc
+    local exact="" full="" selector pattern probe_rc aggregate_rc=1
     while [[ $# -gt 0 ]]; do
-        selector="$1"
-        pattern="$2"
+        case "$1" in
+            -x) exact="${exact:+$exact|}$2" ;;
+            -f) full="${full:+$full|}$2" ;;
+            *) return 2 ;;
+        esac
         shift 2
+    done
 
+    for selector in -x -f; do
+        pattern="$exact"
+        [[ "$selector" == "-x" ]] || pattern="$full"
+        [[ -n "$pattern" ]] || continue
         probe_rc=0
-        if pgrep "$selector" "$pattern" > /dev/null 2>&1; then
-            return 0
-        else
-            probe_rc=$?
-        fi
+        pgrep "$selector" "$pattern" > /dev/null 2>&1 || probe_rc=$?
+        [[ $probe_rc -ne 0 ]] || return 0
         [[ $probe_rc -eq 1 ]] || aggregate_rc=2
     done
 

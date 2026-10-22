@@ -43,7 +43,7 @@ source "$PROJECT_ROOT/lib/clean/app_caches.sh"
 running=true
 pgrep() {
     printf '%s\n' "$*" >> "$HOME/process-trace"
-    [[ "$running" == "true" && "$*" == "-x Xcode" ]]
+    [[ "$running" == "true" && "$1" == -*x && "|$2|" == *"|Xcode|"* ]]
 }
 safe_clean() { printf '%s\n' "$@" >> "$HOME/clean-trace"; }
 safe_remove() { printf '%s\n' "$1" >> "$HOME/clean-trace"; }
@@ -52,7 +52,7 @@ start_section_spinner() { :; }
 stop_section_spinner() { :; }
 note_activity() { :; }
 clean_xcode_tools
-grep -qxF -- '-x Xcode' "$HOME/process-trace" || exit 1
+grep -qE -- '^-x (.*[|])?Xcode([|].*)?$' "$HOME/process-trace" || exit 1
 [[ ! -e "$HOME/clean-trace" && -f "$target/build.bin" ]] || exit 1
 
 # The same eligible project must reach the real cleanup path once Xcode exits.
@@ -114,11 +114,11 @@ source "$PROJECT_ROOT/lib/clean/app_caches.sh"
 running=true
 pgrep() {
     printf '%s\n' "$*" >> "$HOME/process-trace"
-    [[ "$running" == "true" && "$*" == "-x xcodebuild" ]]
+    [[ "$running" == "true" && "$1" == -*x && "|$2|" == *"|xcodebuild|"* ]]
 }
 safe_clean() { printf '%s\n' "$@" >> "$HOME/clean-trace"; }
 clean_xcode_tools
-grep -qxF -- '-x xcodebuild' "$HOME/process-trace" || exit 1
+grep -qE -- '^-x (.*[|])?xcodebuild([|].*)?$' "$HOME/process-trace" || exit 1
 [[ ! -e "$HOME/clean-trace" && -f "$cache" && -f "$product" ]] || exit 1
 
 running=false

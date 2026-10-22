@@ -370,8 +370,8 @@ safe_clean() { echo "SAFE_CLEAN:$2|$1"; }
 clean_service_worker_cache() { echo "SWC:$1"; }
 note_activity() { :; }
 clean_antigravity_caches
-grep -qxF -- '-x Antigravity' "$HOME/process-trace" || exit 1
-grep -qxF -- '-x gemini' "$HOME/process-trace" || exit 1
+grep -qE -- '^-x (.*[|])?Antigravity([|].*)?$' "$HOME/process-trace" || exit 1
+grep -qE -- '^-x (.*[|])?gemini([|].*)?$' "$HOME/process-trace" || exit 1
 EOF
 
     assert_run_success || return 1
@@ -480,7 +480,7 @@ safe_clean() { echo "SAFE_CLEAN:$2|$1"; }
 clean_service_worker_cache() { echo "SWC:$1"; }
 note_activity() { echo "NOTE_ACTIVITY"; }
 pgrep() {
-    [[ "$1" == "-x" && "$2" == "gemini" ]]
+    [[ "$1" == "-x" && "|$2|" == *"|gemini|"* ]]
 }
 clean_antigravity_caches
 EOF

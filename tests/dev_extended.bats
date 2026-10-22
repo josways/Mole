@@ -1053,7 +1053,7 @@ set -euo pipefail
 source "$PROJECT_ROOT/lib/core/common.sh"
 source "$PROJECT_ROOT/lib/clean/dev.sh"
 note_activity() { :; }
-pgrep() { [[ "$1" == "-x" && "$2" == "swift-frontend" ]]; }
+pgrep() { [[ "$1" == -*x && "|$2|" == *"|swift-frontend|"* ]]; }
 safe_remove() { echo "UNEXPECTED_SAFE_REMOVE:$1"; return 0; }
 safe_clean() { echo "UNEXPECTED_SAFE_CLEAN:$1"; return 0; }
 clean_xcode_device_support "$HOME/OwnedDeviceSupport" "iOS DeviceSupport"
@@ -1105,7 +1105,7 @@ source "$PROJECT_ROOT/lib/core/common.sh"
 source "$PROJECT_ROOT/lib/clean/dev.sh"
 note_activity() { :; }
 pgrep() {
-    [[ "$1" == "-x" && "$2" == "Simulator" ]]
+    [[ "$1" == -*x && "|$2|" == *"|Simulator|"* ]] && echo "101 Simulator"
 }
 debug_log() { echo "DEBUG:$*"; }
 safe_sudo_remove() { echo "UNEXPECTED_SAFE_SUDO_REMOVE"; }
@@ -1186,7 +1186,7 @@ EOF
 
     [ "$status" -eq 0 ] || return 1
     [[ "$output" == *"Xcode Simulator system cache · skipped (process state unknown)"* ]] || return 1
-    [[ "$output" == *"DEBUG:CoreSimulator process check failed: Xcode (exit=2)"* ]] || return 1
+    [[ "$output" == *"DEBUG:CoreSimulator process check failed (exit=2)"* ]] || return 1
     [[ "$output" != *"UNEXPECTED_SAFE_SUDO_REMOVE"* ]] || return 1
 }
 
@@ -1196,8 +1196,11 @@ set -euo pipefail
 source "$PROJECT_ROOT/lib/core/common.sh"
 source "$PROJECT_ROOT/lib/clean/dev.sh"
 debug_log() { :; }
+# One pgrep covers every name; Xcode stays running so a later name in the
+# probe order proves the first running one in that order is reported.
 pgrep() {
-    [[ "$1" == "$EXPECTED_MODE" && "$2" == "$EXPECTED_PATTERN" ]]
+    [[ "$1" == -*x && "|$2|" == *"|$EXPECTED_PATTERN|"* ]] || return 1
+    printf '7 %s\n' "$EXPECTED_PATTERN"
 }
 
 while IFS='|' read -r EXPECTED_MODE EXPECTED_PATTERN expected_label; do
@@ -1231,11 +1234,18 @@ set -euo pipefail
 source "$PROJECT_ROOT/lib/core/common.sh"
 source "$PROJECT_ROOT/lib/clean/dev.sh"
 note_activity() { :; }
+# Emulates one process table, so a probe that groups names still only sees
+# these persistent services and generic compilers.
 pgrep() {
-    case "$2" in
-        CoreSimulatorService | simdiskimaged | com.apple.CoreSimulator | XCBBuildService | swift-frontend) return 0 ;;
-        *) return 1 ;;
-    esac
+    local running=" CoreSimulatorService simdiskimaged com.apple.CoreSimulator XCBBuildService swift-frontend "
+    local name found=1 IFS='|'
+    for name in $2; do
+        if [[ "$running" == *" $name "* ]]; then
+            printf '9 %s\n' "$name"
+            found=0
+        fi
+    done
+    return "$found"
 }
 _coresimulator_booted_device_state() { return 1; }
 has_sudo_session() { return 0; }
@@ -1338,7 +1348,7 @@ source "$PROJECT_ROOT/lib/core/common.sh"
 source "$PROJECT_ROOT/lib/clean/dev.sh"
 debug_log() { :; }
 pgrep() {
-    [[ -e "$HOME/foreground-started" && "$1" == "-x" && "$2" == "xcodebuild" ]]
+    [[ -e "$HOME/foreground-started" && "$1" == -*x && "|$2|" == *"|xcodebuild|"* ]]
 }
 _coresimulator_booted_device_state() {
     touch "$HOME/foreground-started"

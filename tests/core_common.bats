@@ -252,7 +252,7 @@ EOF
 set -euo pipefail
 source "$PROJECT_ROOT/lib/core/common.sh"
 pgrep() {
-    [[ "$1" == "-x" && "$2" == "xcodebuild" ]]
+    [[ "$1" == -*x && "|$2|" == *"|xcodebuild|"* ]]
 }
 xcode_build_tooling_process_state
 EOF
@@ -273,6 +273,26 @@ PATH=/nonexistent
 process_state=0
 xcode_build_tooling_process_state || process_state=$?
 [[ "$process_state" -eq 2 ]] || exit 3
+EOF
+
+    [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+}
+
+@test "Xcode and CoreSimulator process probes each run one pgrep" {
+    run env PROJECT_ROOT="$PROJECT_ROOT" /bin/bash --noprofile --norc <<'EOF'
+set -euo pipefail
+source "$PROJECT_ROOT/lib/core/common.sh"
+source "$PROJECT_ROOT/lib/clean/dev.sh"
+rm -f "$HOME/pgrep-calls"
+pgrep() { printf x >> "$HOME/pgrep-calls"; return 1; }
+calls() { wc -c < "$HOME/pgrep-calls" | tr -d ' '; }
+debug_log() { :; }
+process_state=0
+xcode_build_tooling_process_state || process_state=$?
+[[ "$process_state" -eq 1 && "$(calls)" -eq 1 ]] || { echo "xcode calls=$(calls) state=$process_state"; exit 1; }
+rm -f "$HOME/pgrep-calls"; process_state=0
+_coresimulator_cache_process_running || process_state=$?
+[[ "$process_state" -eq 1 && "$(calls)" -eq 1 ]] || { echo "simulator calls=$(calls) state=$process_state"; exit 1; }
 EOF
 
     [ "$status" -eq 0 ] || { echo "$output"; return 1; }

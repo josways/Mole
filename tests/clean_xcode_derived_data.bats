@@ -104,7 +104,7 @@ is_path_whitelisted() { return 1; }
 defer_cleanup_family() { echo "DEFER:$1"; }
 DRY_RUN=false
 
-pgrep() { [[ "$1" == "-x" && "$2" == "xcodebuild" ]]; }
+pgrep() { [[ "$1" == -*x && "|$2|" == *"|xcodebuild|"* ]]; }
 export -f pgrep
 
 dd_dir="$HOME/Library/Developer/Xcode/DerivedData"
