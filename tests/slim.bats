@@ -98,6 +98,22 @@ slim_env() {
 	[[ "$output" == *"needs an Apple Silicon Mac"* ]]
 }
 
+@test "slim reads the host from /usr/sbin/sysctl, not PATH (#1804)" {
+	[[ "$(/usr/sbin/sysctl -n hw.optional.arm64 2> /dev/null)" == "1" ]] || skip "needs an Apple Silicon host"
+	local bin="$BATS_TEST_TMPDIR/path-bin"
+	mkdir -p "$bin"
+	printf '#!/bin/sh\necho 0\n' > "$bin/sysctl"
+	chmod +x "$bin/sysctl"
+
+	run env HOME="$HOME" PATH="$bin:/usr/bin:/bin" MO_NO_OPLOG=1 MOLE_TEST_MODE=1 /bin/bash -c '
+		source "$1"
+		slim_host_is_apple_silicon && echo "apple-silicon"
+	' bash "$PROJECT_ROOT/bin/slim.sh"
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"apple-silicon"* ]]
+}
+
 @test "slim_fat_slices reads fat and fat64 headers the way lipo does" {
 	[[ "$SLIM_HAVE_FAT_TOOLCHAIN" == "1" ]] || skip "needs clang and a developer directory"
 	lipo "$FIXTURE_BIN_DIR/fat-exe" -thin arm64 -output "$BATS_TEST_TMPDIR/a" || return 1

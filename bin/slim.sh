@@ -83,7 +83,8 @@ slim_host_is_apple_silicon() {
         return
     fi
     # uname -m reports x86_64 inside a Rosetta shell; the sysctl does not.
-    [[ "$(sysctl -n hw.optional.arm64 2> /dev/null || echo 0)" == "1" ]]
+    # Absolute path: a PATH without /usr/sbin made every Mac read as Intel (#1804).
+    [[ "$(/usr/sbin/sysctl -n hw.optional.arm64 2> /dev/null || echo 0)" == "1" ]]
 }
 
 slim_plist_value() {
