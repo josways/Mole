@@ -1105,7 +1105,7 @@ EOF
 	local window
 	# shellcheck disable=SC2016 # the \$ patterns are literal source text
 	window=$(command grep -A2 'live_sibling_rc -lt 128 &&' \
-		"$PROJECT_ROOT/lib/uninstall/batch.sh")
+		"$PROJECT_ROOT/lib/uninstall/batch_execute.sh")
 	# Positive control: the acceptance branch must exist at all.
 	printf '%s\n' "$window" | command grep -q 'guard_login' || {
 		echo "acceptance branch not found"

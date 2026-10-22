@@ -3681,8 +3681,8 @@ result=$(decode_bundle_id_list "$helper_ids" "App Cleaner 9" 2>&1)
 
 # The execute path must decode helper ids with the id decoder, not the
 # path decoder that rejects them.
-grep -q 'decode_bundle_id_list "$encoded_login_item_helpers"' "$PROJECT_ROOT/lib/uninstall/batch.sh" || exit 1
-if grep -q 'decode_file_list "$encoded_login_item_helpers"' "$PROJECT_ROOT/lib/uninstall/batch.sh"; then
+grep -q 'decode_bundle_id_list "$encoded_login_item_helpers"' "$PROJECT_ROOT/lib/uninstall/batch_execute.sh" || exit 1
+if grep -q 'decode_file_list "$encoded_login_item_helpers"' "$PROJECT_ROOT/lib/uninstall/batch_execute.sh"; then
     exit 1
 fi
 exit 0
@@ -5928,7 +5928,7 @@ EOF
     # inside _batch_execute_removals.
     local body spin_line scan_line
     body=$(awk '/^_batch_execute_removals\(\)/{f=1} f{n++; print n": "$0} f && /^\}/{exit}' \
-        "$PROJECT_ROOT/lib/uninstall/batch.sh")
+        "$PROJECT_ROOT/lib/uninstall/batch_execute.sh")
     spin_line=$(printf '%s\n' "$body" | command grep -m1 'start_inline_spinner' | cut -d: -f1)
     scan_line=$(printf '%s\n' "$body" | command grep -m1 'uninstall_live_bundle_has_other_install' | cut -d: -f1)
     [[ -n "$spin_line" && -n "$scan_line" ]] || {
@@ -7202,13 +7202,13 @@ EOF
 
 @test "batch preview and summaries render app names through the terminal-safe helper" {
     # shellcheck disable=SC2016
-    grep -Fq 'display_app_name=$(_uninstall_display_text "$app_name")' "$PROJECT_ROOT/lib/uninstall/batch.sh" || return 1
+    grep -Fq 'display_app_name=$(_uninstall_display_text "$app_name")' "$PROJECT_ROOT/lib/uninstall/batch_preview.sh" || return 1
     # shellcheck disable=SC2016
-    grep -Fq 'Uninstalling $(_uninstall_display_text "$app_name")' "$PROJECT_ROOT/lib/uninstall/batch.sh" || return 1
+    grep -Fq 'Uninstalling $(_uninstall_display_text "$app_name")' "$PROJECT_ROOT/lib/uninstall/batch_execute.sh" || return 1
     # shellcheck disable=SC2016
-    grep -Fq 'running_list+="$(_uninstall_display_text "${running_at_uninstall_apps[idx]}")"' "$PROJECT_ROOT/lib/uninstall/batch.sh" || return 1
+    grep -Fq 'running_list+="$(_uninstall_display_text "${running_at_uninstall_apps[idx]}")"' "$PROJECT_ROOT/lib/uninstall/batch_summary.sh" || return 1
     # shellcheck disable=SC2016
-    grep -Fq 'bg_list+="$(_uninstall_display_text "${background_items_warning_apps[idx]}")"' "$PROJECT_ROOT/lib/uninstall/batch.sh"
+    grep -Fq 'bg_list+="$(_uninstall_display_text "${background_items_warning_apps[idx]}")"' "$PROJECT_ROOT/lib/uninstall/batch_summary.sh"
 }
 
 @test "batch uninstall without a terminal exits nonzero and removes nothing" {
