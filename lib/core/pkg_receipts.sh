@@ -17,7 +17,7 @@ pkg_receipt_nonstandard_app_paths() {
     local require_complete=0
     [[ "${1:-}" == "--require-complete" ]] && require_complete=1
     local cache_file="${MOLE_PKG_RECEIPT_CACHE_FILE:-$HOME/.cache/mole/pkg_receipt_apps_v1}"
-    local cache_ttl="${MOLE_PKG_RECEIPT_CACHE_TTL:-3600}"
+    local cache_ttl=3600
     local now_epoch=0
     if declare -f get_epoch_seconds > /dev/null 2>&1; then
         now_epoch=$(get_epoch_seconds)
@@ -53,7 +53,7 @@ pkg_receipt_nonstandard_app_paths() {
     local receipts_dir="${MOLE_PKG_RECEIPT_DB_DIR:-/var/db/receipts}"
     local receipt_stamps=""
     receipt_stamps=$(LC_ALL=C "$STAT_BSD" -f '%m %N' "$receipts_dir"/*.plist 2> /dev/null) || receipt_stamps=""
-    if [[ -n "$receipt_stamps" && -z "${MOLE_PKG_RECEIPT_CACHE_TTL:-}" ]]; then
+    if [[ -n "$receipt_stamps" ]]; then
         cache_ttl=604800
     fi
 

@@ -1789,8 +1789,7 @@ clean_external_volume_target() {
     # mutation. A timed-out find can leave a valid-looking prefix on stdout;
     # consuming that prefix from process substitution used to delete those rows
     # and report success even though the scan itself returned 124.
-    local metadata_scan_timeout="${MOLE_EXTERNAL_VOLUME_SCAN_TIMEOUT:-15}"
-    [[ "$metadata_scan_timeout" =~ ^[0-9]+$ ]] || metadata_scan_timeout=15
+    local metadata_scan_timeout=15
     local metadata_scan_file=""
     local metadata_scan_errors=""
     if ! metadata_scan_file=$(mktemp_file "external-volume-metadata") ||
@@ -2486,10 +2485,7 @@ clean_application_support_logs() {
     local total_size_partial=false
     local cleaned_count=0
     local found_any=false
-    local size_timeout_seconds="${MOLE_APP_SUPPORT_ITEM_SIZE_TIMEOUT_SEC:-0.4}"
-    if [[ ! "$size_timeout_seconds" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
-        size_timeout_seconds=0.4
-    fi
+    local size_timeout_seconds=0.4
     # Enable nullglob for safe globbing.
     local _ng_state
     _ng_state=$(shopt -p nullglob || true)
@@ -3144,7 +3140,7 @@ _large_prefetch_run() {
             fi
             # A row the pool cannot give its usual budget is better measured
             # inline later, where it gets that budget again.
-            if [[ ${timeout_seconds%%.*} -lt ${MOLE_LARGE_CANDIDATE_SIZE_TIMEOUT:-3} ]]; then
+            if [[ ${timeout_seconds%%.*} -lt 3 ]]; then
                 next=$total
                 break
             fi
@@ -3282,7 +3278,7 @@ _check_large_file_candidates_body() {
 
     _large_candidate_size_kb() {
         local path="$1"
-        local timeout_seconds="${2:-${MOLE_LARGE_CANDIDATE_SIZE_TIMEOUT:-3}}"
+        local timeout_seconds="${2:-3}"
         local exact="${3:-}"
         [[ "$timeout_seconds" =~ ^[0-9]+$ ]] || timeout_seconds=3
         local du_output="" du_rc=0

@@ -113,7 +113,7 @@ _mole_repair_stale_brew_entries() {
 
     local relink_rc=0
     HOMEBREW_NO_ENV_HINTS=1 HOMEBREW_NO_AUTO_UPDATE=1 NONINTERACTIVE=1 \
-        run_with_timeout "${MOLE_HOMEBREW_UPDATE_TIMEOUT:-120}" \
+        run_with_timeout 120 \
         brew link --overwrite mole > /dev/null 2>&1 || relink_rc=$?
     if [[ $relink_rc -eq 0 ]]; then
         echo -e "${GREEN}${ICON_SUCCESS}${NC} Repaired stale launcher, now pointing at the current Homebrew install"
@@ -140,7 +140,7 @@ update_via_homebrew() {
         echo "Updating Homebrew..."
     fi
 
-    local brew_update_timeout="${MOLE_HOMEBREW_UPDATE_TIMEOUT:-120}"
+    local brew_update_timeout=120
     HOMEBREW_NO_ENV_HINTS=1 HOMEBREW_NO_AUTO_UPDATE=1 NONINTERACTIVE=1 \
         run_with_timeout "$brew_update_timeout" brew update > "$temp_update" 2>&1 || true
 
@@ -155,7 +155,7 @@ update_via_homebrew() {
         echo "Upgrading Mole..."
     fi
 
-    local brew_upgrade_timeout="${MOLE_HOMEBREW_UPGRADE_TIMEOUT:-120}"
+    local brew_upgrade_timeout=120
     local upgrade_status=0
     HOMEBREW_NO_ENV_HINTS=1 HOMEBREW_NO_AUTO_UPDATE=1 NONINTERACTIVE=1 \
         run_with_timeout "$brew_upgrade_timeout" brew upgrade mole > "$temp_upgrade" 2>&1 || upgrade_status=$?

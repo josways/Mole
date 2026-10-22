@@ -60,7 +60,7 @@ HISTORY_ACTIVE_START_SEQ=0
 HISTORY_START_SEQ_COUNTER=0
 
 history_operations_log_file() {
-    printf '%s\n' "${MOLE_OPERATIONS_LOG:-${OPERATIONS_LOG_FILE:-$HOME/Library/Logs/mole/operations.log}}"
+    printf '%s\n' "${OPERATIONS_LOG_FILE:-$HOME/Library/Logs/mole/operations.log}"
 }
 
 history_deletions_log_file() {
