@@ -16,6 +16,7 @@ setup_file() {
         source '$PROJECT_ROOT/lib/core/common.sh'
         source '$PROJECT_ROOT/lib/optimize/diagnostics.sh'
         sysctl() { echo 'total = 8192.00M  used = 100.00M  free = 8092.00M'; }
+        SYSCTL_CMD=sysctl
         memory_pressure() { echo 'System-wide memory free percentage: 80%'; }
         out=\$(opt_diag_memory_pressure)
         [ -z \"\$out\" ] && echo SILENT || echo \"LEAKED: \$out\"
@@ -29,6 +30,7 @@ setup_file() {
         source '$PROJECT_ROOT/lib/core/common.sh'
         source '$PROJECT_ROOT/lib/optimize/diagnostics.sh'
         sysctl() { echo 'total = 16384.00M  used = 15500.00M  free = 884.00M'; }
+        SYSCTL_CMD=sysctl
         memory_pressure() { echo 'System-wide memory free percentage: 8%'; }
         ps() { printf '%s\n' '   RSS COMM' '8600000 com.apple.Virtualization.VirtualMachine' '2000000 /usr/local/bin/codex' '500 tiny'; }
         opt_diag_memory_pressure
@@ -202,6 +204,7 @@ EOF
         source '$PROJECT_ROOT/lib/core/common.sh'
         source '$PROJECT_ROOT/lib/optimize/diagnostics.sh'
         sysctl() { echo 'total = 16384.00M  used = 15500.00M  free = 884.00M'; }
+        SYSCTL_CMD=sysctl
         memory_pressure() { echo 'System-wide memory free percentage: 8%'; }
         ps() { printf '%s\n' '   RSS COMM' '8600000 com.apple.Virtualization.VirtualMachine' '2000000 codex'; }
         opt_diag_memory_pressure | sed 's/\x1b\[[0-9;]*m//g' | grep -E '^    [^ ]' |
@@ -227,6 +230,7 @@ EOF
         source '$PROJECT_ROOT/lib/core/common.sh'
         source '$PROJECT_ROOT/lib/optimize/diagnostics.sh'
         sysctl() { echo 'total = 1024.00M  used = 900.00M  free = 124.00M'; }
+        SYSCTL_CMD=sysctl
         memory_pressure() { echo 'System-wide memory free percentage: 8%'; }
         ps() { printf '%s\n' '   RSS COMM' '100 tiny'; }
         opt_diag_memory_pressure

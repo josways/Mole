@@ -549,6 +549,9 @@ STAT_BSD="/usr/bin/stat"
 # File Provider mounts use this path too; GNU findutils earlier in PATH quotes
 # paths in its errors and fails on mounts BSD find walks past.
 FIND_BSD="/usr/bin/find"
+# sysctl lives in /usr/sbin, which a shell PATH may leave out; the PATH lookup
+# then fails and callers silently use their fallback values (#1804).
+SYSCTL_CMD="/usr/sbin/sysctl"
 
 # Only complete generated completion lines are owned by Mole. A quoted mention
 # or a mixed command may carry unrelated user settings and must remain intact.
@@ -828,7 +831,7 @@ mole_wait_for_any_worker() {
 get_optimal_parallel_jobs() {
     local operation_type="${1:-default}"
     if [[ -z "${MOLE_CPU_CORES_CACHE:-}" ]]; then
-        export MOLE_CPU_CORES_CACHE=$(sysctl -n hw.ncpu 2> /dev/null || echo 4)
+        export MOLE_CPU_CORES_CACHE=$("$SYSCTL_CMD" -n hw.ncpu 2> /dev/null || echo 4)
     fi
     local cpu_cores="$MOLE_CPU_CORES_CACHE"
     case "$operation_type" in

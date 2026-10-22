@@ -458,7 +458,7 @@ opt_diag_get_swapusage() {
         printf '%s\n' "$MOLE_OPTIMIZE_SWAPUSAGE"
         return 0
     fi
-    sysctl -n vm.swapusage 2> /dev/null || true
+    "$SYSCTL_CMD" -n vm.swapusage 2> /dev/null || true
 }
 
 opt_diag_get_mem_free_pct() {

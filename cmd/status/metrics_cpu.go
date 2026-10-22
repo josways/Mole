@@ -142,7 +142,7 @@ func getCoreTopology() (pCores, eCores int) {
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 
-	out, err := runCmd(ctx, "sysctl", "-n",
+	out, err := runCmd(ctx, "/usr/sbin/sysctl", "-n",
 		"hw.perflevel0.logicalcpu",
 		"hw.perflevel1.logicalcpu")
 	if err != nil {

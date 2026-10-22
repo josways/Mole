@@ -1355,6 +1355,42 @@ assert b'Cleaning fixture...' not in raw.split(b'Error:', 1)[1], raw
 PY
 }
 
+@test "sysctl never resolves through PATH (#1804)" {
+    # sysctl lives in /usr/sbin, which a shell PATH may leave out; the lookup
+    # then fails and every caller falls back silently. Shell calls go through
+    # $SYSCTL_CMD (or the literal /usr/sbin/sysctl), Go through the absolute path.
+    run env PROJECT_ROOT="$PROJECT_ROOT" /bin/bash --noprofile --norc <<'EOF'
+set -euo pipefail
+start='(^|[[:space:];(|&`"'"'"']|[$][(])'
+pattern="${start}sysctl[[:space:]]"
+for probe in '    n=$(sysctl -n hw.ncpu 2> /dev/null || echo 4)' '    sysctl -n vm.swapusage 2> /dev/null || true'; do
+    printf '%s\n' "$probe" | grep -qE "$pattern" || { echo "matcher missed: $probe"; exit 1; }
+done
+for allowed in '    n=$("$SYSCTL_CMD" -n hw.ncpu)' '    [[ "$(/usr/sbin/sysctl -n hw.optional.arm64)" == "1" ]]'; do
+    if printf '%s\n' "$allowed" | grep -qE "$pattern"; then
+        echo "matcher flagged: $allowed"
+        exit 1
+    fi
+done
+matched=$(find "$PROJECT_ROOT/lib" "$PROJECT_ROOT/bin" -name '*.sh' -print0 |
+    xargs -0 grep -nE "$pattern" "$PROJECT_ROOT/mole" "$PROJECT_ROOT/install.sh" |
+    grep -vE '^[^:]+:[0-9]+:[[:space:]]*#' || true)
+if [[ -n "$matched" ]]; then
+    echo "sysctl resolved through PATH: $matched"
+    exit 1
+fi
+go_matched=$(find "$PROJECT_ROOT/cmd" -name '*.go' ! -name '*_test.go' -print0 | xargs -0 grep -n '"sysctl"' || true)
+if [[ -n "$go_matched" ]]; then
+    echo "Go sysctl resolved through PATH: $go_matched"
+    exit 1
+fi
+echo "clean"
+EOF
+
+    [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+    [[ "$output" == "clean" ]]
+}
+
 @test "BSD-only stat, date, find and tr forms never resolve through PATH (#1196, #1752)" {
     # GNU coreutils earlier in PATH reads stat -f as file-system status and
     # date -r/-j differently, so these calls go through $STAT_BSD and

@@ -24,7 +24,7 @@ get_memory_info() {
     local total_bytes used_gb total_gb
 
     # Total memory
-    total_bytes=$(sysctl -n hw.memsize 2> /dev/null || echo "0")
+    total_bytes=$("$SYSCTL_CMD" -n hw.memsize 2> /dev/null || echo "0")
     total_gb=$(LC_ALL=C awk "BEGIN {printf \"%.2f\", $total_bytes / (1024*1024*1024)}" 2> /dev/null || echo "0")
     [[ -z "$total_gb" || "$total_gb" == "" ]] && total_gb="0"
 
@@ -35,7 +35,7 @@ get_memory_info() {
     # 16384 on Apple Silicon, not 4096. Read the size it declares in its
     # header so used_bytes is correct; fall back to sysctl, then 4096.
     page_size=$(printf '%s\n' "$vm_output" | LC_ALL=C sed -n 's/.*page size of \([0-9][0-9]*\) bytes.*/\1/p' | head -1)
-    [[ "$page_size" =~ ^[0-9]+$ ]] || page_size=$(sysctl -n hw.pagesize 2> /dev/null)
+    [[ "$page_size" =~ ^[0-9]+$ ]] || page_size=$("$SYSCTL_CMD" -n hw.pagesize 2> /dev/null)
     [[ "$page_size" =~ ^[0-9]+$ ]] || page_size=4096
 
     active=$(echo "$vm_output" | LC_ALL=C awk '/Pages active:/ {print $NF}' | tr -d '.\n' 2> /dev/null)
@@ -83,7 +83,7 @@ get_disk_info() {
 get_uptime_days() {
     local boot_output boot_time uptime_days
 
-    boot_output=$(sysctl -n kern.boottime 2> /dev/null || echo "")
+    boot_output=$("$SYSCTL_CMD" -n kern.boottime 2> /dev/null || echo "")
     boot_time=$(echo "$boot_output" | awk -F 'sec = |, usec' '{print $2}' 2> /dev/null || echo "")
 
     if [[ -n "$boot_time" && "$boot_time" =~ ^[0-9]+$ ]]; then
