@@ -4,10 +4,10 @@
 
 ```bash
 # Install development tools
-brew install shfmt shellcheck bats-core golangci-lint
+brew install go shfmt shellcheck bats-core golangci-lint fd
 
 # Install goimports for better Go formatting
-go install golang.org/x/tools/cmd/goimports@latest
+go install golang.org/x/tools/cmd/goimports@v0.49.0
 
 # Install pre-commit hook (runs format/lint checks on every commit)
 git config core.hooksPath .githooks
@@ -26,6 +26,20 @@ Run tests:
 ```bash
 ./scripts/test.sh
 ```
+
+For a complete check that refuses missing tools and includes the full Bats and
+Go suites plus race detection, use the development environment pinned by
+`flake.lock`:
+
+```bash
+nix develop --command ./scripts/verify.sh
+# Or, with all tools already installed:
+make verify-full
+```
+
+`make verify` remains the shorter lint + Go test command. See
+[Quality contracts](docs/QUALITY_CONTRACTS.md) for module boundaries, shared
+Shell/Go contracts, fault injection, fuzzing and performance measurements.
 
 ## Code Style
 

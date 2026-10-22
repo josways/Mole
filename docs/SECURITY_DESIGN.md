@@ -4,8 +4,9 @@ This document describes the safety mechanisms that prevent Mole from
 destroying data it shouldn't. It is written for reviewers, contributors,
 and anyone evaluating Mole for production use.
 
-The corresponding implementation lives in `lib/core/file_ops.sh`,
-`lib/core/app_protection.sh`, and `lib/core/app_protection_data.sh`. Path
+The corresponding implementation loads through `lib/core/file_ops.sh` and its
+internal `file_ops_*.sh` modules, alongside
+`lib/core/app_protection.sh` and `lib/core/app_protection_data.sh`. Path
 validation has machine-checked fuzz tests in `cmd/analyze/delete_fuzz_test.go`
 and `tests/path_validation_fuzz.bats`.
 
@@ -59,7 +60,9 @@ its launcher-signature check with plain `rm -f` and removes the Mole-owned
 cache and log directories with `rm -rf` annotated `# SAFE:`. The validator
 applies six independent checks. Any one rejecting kills the operation.
 
-Location: `validate_path_for_deletion` in `lib/core/file_ops.sh`.
+Location: `validate_path_for_deletion` in `lib/core/file_ops_policy.sh`, loaded
+through `lib/core/file_ops.sh`. Module contracts and test owners are indexed in
+[`QUALITY_CONTRACTS.md`](QUALITY_CONTRACTS.md).
 
 1. **Non-empty + absolute.** Empty paths and any path not starting with
    `/` are rejected. Eliminates ambiguity from relative paths interacting

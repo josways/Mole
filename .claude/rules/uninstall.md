@@ -51,6 +51,8 @@ Uninstall changes at minimum: run `MOLE_TEST_NO_AUTH=1 bats tests/uninstall.bats
 
 ## Batch execution and Homebrew (`lib/uninstall/batch.sh`)
 
+- `batch.sh` remains the entry point and trap/sudo orchestrator. `batch_plan.sh`, `batch_preview.sh`, `batch_execute.sh` and `batch_summary.sh` define its phases and share orchestrator locals through Bash dynamic scope; source them only through `batch.sh`. Keep discovery snapshots, confirmation, authorization and execution in that order. `docs/QUALITY_CONTRACTS.md` maps inputs, outcomes and test owners; source invariants inspect the phase that owns the actual code.
+
 - `lib/uninstall/batch.sh` owns batch uninstall execution, the shared-bundle-id sibling guard, launch service and login item teardown, and brew cask removal routing. Run `MOLE_TEST_NO_AUTH=1 bats tests/uninstall.bats tests/brew_uninstall.bats tests/uninstall_remove_file_list.bats tests/uninstall_safety.bats`.
 - `uninstall_bundles_share_remnants` runs once per installed app in every sibling scan, three scans per selected app, so it stays fork-free (`mole_ascii_lowercase`, `_uninstall_strip_version_suffix_into`, no command substitution or `tr`); `sibling matching folds case in-process instead of forking per candidate` in `tests/uninstall_safety.bats` locks it.
 - Homebrew Caskroom and installed-list snapshots are complete, bounded, and scoped only to one inspection pass; discard them before confirmation, keep exact ownership checks, and always probe installed state afresh after removal.

@@ -1,6 +1,6 @@
 ---
 name: safety-reviewer
-description: Audits Mole changes for destructive-action regressions across deletion, app protection, privilege boundaries, dry-run behavior, operation logging, package-manager cleanup, and exact leftover matching. Use before merging changes under lib/clean/**, lib/uninstall/**, lib/manage/**, bin/clean.sh, bin/purge.sh, bin/uninstall.sh, bin/installer.sh, lib/core/file_ops.sh, or lib/core/app_protection*.sh.
+description: Audits Mole changes for destructive-action regressions across deletion, app protection, privilege boundaries, dry-run behavior, operation logging, package-manager cleanup, and exact leftover matching. Use before merging changes under lib/clean/**, lib/uninstall/**, lib/manage/**, bin/clean.sh, bin/purge.sh, bin/uninstall.sh, bin/installer.sh, lib/core/file_ops*.sh, or lib/core/app_protection*.sh.
 tools: Read, Grep, Glob, Bash
 ---
 
@@ -26,7 +26,8 @@ You read code and tests.
    prove exact app or bundle evidence, protected-path coverage, preview or
    confirmation, dry-run behavior, operation logging, and the final deletion
    helper. A safe primary branch does not make a broad fallback safe.
-4. Treat raw removal outside `lib/core/file_ops.sh` as P0 unless the call site
+4. Treat raw removal outside the `lib/core/file_ops.sh` funnel and its internal
+   `file_ops_*.sh` modules as P0 unless the call site
    has a narrow `# SAFE:` exception for an already verified exact path and a
    regression test that proves why the shared funnel cannot be used. Never
    generalize one exception into a second deletion API.

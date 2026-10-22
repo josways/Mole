@@ -1,6 +1,7 @@
 ---
 paths:
-  - "lib/core/file_ops.sh"
+  - "lib/core/file_ops*.sh"
+  - "lib/core/paths.sh"
   - "lib/core/base.sh"
   - "lib/core/ui.sh"
   - "lib/core/common.sh"
@@ -16,6 +17,8 @@ paths:
 # Core helpers: deletion funnel, sizing, section helpers, UI
 
 ## `lib/core/file_ops.sh` and `lib/core/base.sh`
+
+- `file_ops.sh` remains the public load/deletion boundary. Its internal `file_ops_*.sh` modules own policy, safe execution, Trash, bounded find, sizing/accounting and forensic logging; load them through the facade. Their contracts and shared Shell/Go tests are indexed in `docs/QUALITY_CONTRACTS.md`; a path move does not authorize policy or source-order changes.
 
 - `lib/core/file_ops.sh` owns the deletion funnel, Trash/permanent routing, operation-log outcomes, size accounting, and last-mile path validation. `lib/core/base.sh` owns shared shell primitives and source-order-sensitive section helpers. Keep policy in the existing protection helpers rather than adding a second delete path. Run `MOLE_TEST_NO_AUTH=1 bats tests/file_ops_mole_delete.bats tests/file_ops_size.bats tests/file_ops_safe_remove_symlink.bats tests/user_file_ops.bats tests/core_safe_functions.bats tests/history.bats`.
 - Trash batches may share stable invoking-user values, never destination ownership/mode or live source evidence. Keep operation and deletion logs synchronous; existing writable logs can skip repeated setup, but a missing log must be recreated. Shared nested-path filtering is literal and must keep parent coverage across prefix siblings; Gradle target normalization belongs only to clean.
