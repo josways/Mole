@@ -17,7 +17,7 @@ setup() {
 
     printf 'auth sufficient pam_tid.so\n' > "$pam_sudo"
     printf 'auth include pam_opendirectory.so\n' > "$pam_sudo_local"
-    export MOLE_PAM_SUDO_FILE="$pam_sudo"
+    export MOLE_TEST_MODE=1 MOLE_PAM_SUDO_FILE="$pam_sudo"
     export MOLE_PAM_SUDO_LOCAL_FILE="$pam_sudo_local"
 
     run check_touchid_support
@@ -27,6 +27,21 @@ setup() {
 
     run check_touchid_support
     [ "$status" -eq 1 ]
+}
+
+@test "PAM file overrides are honored only in test mode" {
+    run env MOLE_TEST_MODE=0 MOLE_TEST_NO_AUTH=0 \
+        MOLE_PAM_SUDO_FILE="$BATS_TEST_TMPDIR/sudo" \
+        MOLE_PAM_SUDO_LOCAL_FILE="$BATS_TEST_TMPDIR/sudo_local" \
+        /bin/bash -c "source '$PROJECT_ROOT/lib/core/sudo.sh'; mole_pam_sudo_paths"
+    [ "$status" -eq 0 ]
+    [ "$output" = $'/etc/pam.d/sudo\n/etc/pam.d/sudo_local' ]
+
+    run env MOLE_TEST_MODE=1 \
+        MOLE_PAM_SUDO_FILE="$BATS_TEST_TMPDIR/sudo" \
+        /bin/bash -c "source '$PROJECT_ROOT/lib/core/sudo.sh'; mole_pam_sudo_paths"
+    [ "$status" -eq 0 ]
+    [ "$output" = "$BATS_TEST_TMPDIR/sudo"$'\n'"$BATS_TEST_TMPDIR/sudo_local" ]
 }
 
 @test "sudo adoption authorizes commands only on a foreground terminal" {

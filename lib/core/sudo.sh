@@ -8,9 +8,25 @@ set -euo pipefail
 # Touch ID and Clamshell Detection
 # ============================================================================
 
+# Print the sudo PAM file and its sudo_local companion, one per line.
+# MOLE_PAM_SUDO_FILE / MOLE_PAM_SUDO_LOCAL_FILE are test-only: touchid writes
+# these paths through sudo, so an exported override in a real run must not
+# choose which root-owned file receives the pam_tid line.
+mole_pam_sudo_paths() {
+    local pam_sudo_file="/etc/pam.d/sudo" pam_sudo_local_file=""
+    if [[ "${MOLE_TEST_MODE:-0}" == "1" || "${MOLE_TEST_NO_AUTH:-0}" == "1" ]]; then
+        pam_sudo_file="${MOLE_PAM_SUDO_FILE:-$pam_sudo_file}"
+        pam_sudo_local_file="${MOLE_PAM_SUDO_LOCAL_FILE:-}"
+    fi
+    printf '%s\n%s\n' "$pam_sudo_file" "${pam_sudo_local_file:-${pam_sudo_file%/*}/sudo_local}"
+}
+
 check_touchid_support() {
-    local pam_sudo_file="${MOLE_PAM_SUDO_FILE:-/etc/pam.d/sudo}"
-    local pam_sudo_local_file="${MOLE_PAM_SUDO_LOCAL_FILE:-$(dirname "$pam_sudo_file")/sudo_local}"
+    local pam_sudo_file pam_sudo_local_file
+    {
+        IFS= read -r pam_sudo_file
+        IFS= read -r pam_sudo_local_file
+    } < <(mole_pam_sudo_paths)
 
     # Check sudo_local first (Sonoma+)
     if [[ -f "$pam_sudo_local_file" ]] && mole_pam_enables_touchid "$pam_sudo_local_file"; then

@@ -23,8 +23,10 @@ source "$LIB_DIR/core/common.sh"
 # Set up global cleanup trap
 trap cleanup_temp_files EXIT INT TERM
 
-PAM_SUDO_FILE="${MOLE_PAM_SUDO_FILE:-/etc/pam.d/sudo}"
-PAM_SUDO_LOCAL_FILE="${MOLE_PAM_SUDO_LOCAL_FILE:-$(dirname "$PAM_SUDO_FILE")/sudo_local}"
+{
+    IFS= read -r PAM_SUDO_FILE
+    IFS= read -r PAM_SUDO_LOCAL_FILE
+} < <(mole_pam_sudo_paths)
 readonly PAM_SUDO_FILE
 readonly PAM_SUDO_LOCAL_FILE
 readonly PAM_TID_LINE="auth       sufficient     pam_tid.so"

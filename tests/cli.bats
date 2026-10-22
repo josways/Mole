@@ -653,7 +653,7 @@ EOF
 auth       sufficient     pam_opendirectory.so
 EOF
 
-	run env MOLE_PAM_SUDO_FILE="$pam_file" "$PROJECT_ROOT/bin/touchid.sh" status
+	run env MOLE_TEST_MODE=1 MOLE_PAM_SUDO_FILE="$pam_file" "$PROJECT_ROOT/bin/touchid.sh" status
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"not configured"* ]] || return 1
 
@@ -661,7 +661,7 @@ EOF
 auth       sufficient     pam_tid.so
 EOF
 
-	run env MOLE_PAM_SUDO_FILE="$pam_file" "$PROJECT_ROOT/bin/touchid.sh" status
+	run env MOLE_TEST_MODE=1 MOLE_PAM_SUDO_FILE="$pam_file" "$PROJECT_ROOT/bin/touchid.sh" status
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"enabled"* ]]
 }
@@ -675,7 +675,7 @@ EOF
 	fake_bin="$HOME/fake-bin"
 	create_fake_utils "$fake_bin"
 
-	run env PATH="$fake_bin:$PATH" MOLE_PAM_SUDO_FILE="$pam_file" "$PROJECT_ROOT/bin/touchid.sh" enable
+	run env PATH="$fake_bin:$PATH" MOLE_TEST_MODE=1 MOLE_PAM_SUDO_FILE="$pam_file" "$PROJECT_ROOT/bin/touchid.sh" enable
 	[ "$status" -eq 0 ]
 	grep -q "pam_tid.so" "$pam_file"
 	[[ -f "${pam_file}.mole-backup" ]]
@@ -691,7 +691,7 @@ EOF
 	fake_bin="$HOME/fake-bin-disable"
 	create_fake_utils "$fake_bin"
 
-	run env PATH="$fake_bin:$PATH" MOLE_PAM_SUDO_FILE="$pam_file" "$PROJECT_ROOT/bin/touchid.sh" disable
+	run env PATH="$fake_bin:$PATH" MOLE_TEST_MODE=1 MOLE_PAM_SUDO_FILE="$pam_file" "$PROJECT_ROOT/bin/touchid.sh" disable
 	[ "$status" -eq 0 ]
 	run grep "pam_tid.so" "$pam_file"
 	[ "$status" -ne 0 ]
@@ -707,9 +707,9 @@ EOF
 	fake_bin="$HOME/fake-bin-logged"
 	create_fake_utils "$fake_bin"
 
-	run env HOME="$HOME" PATH="$fake_bin:$PATH" MOLE_PAM_SUDO_FILE="$pam_file" "$PROJECT_ROOT/bin/touchid.sh" enable
+	run env HOME="$HOME" PATH="$fake_bin:$PATH" MOLE_TEST_MODE=1 MOLE_PAM_SUDO_FILE="$pam_file" "$PROJECT_ROOT/bin/touchid.sh" enable
 	[ "$status" -eq 0 ]
-	run env HOME="$HOME" PATH="$fake_bin:$PATH" MOLE_PAM_SUDO_FILE="$pam_file" "$PROJECT_ROOT/bin/touchid.sh" disable
+	run env HOME="$HOME" PATH="$fake_bin:$PATH" MOLE_TEST_MODE=1 MOLE_PAM_SUDO_FILE="$pam_file" "$PROJECT_ROOT/bin/touchid.sh" disable
 	[ "$status" -eq 0 ]
 
 	run cat "$HOME/Library/Logs/mole/operations.log"
@@ -723,7 +723,7 @@ EOF
 auth       sufficient     pam_opendirectory.so
 EOF
 
-	run env MOLE_PAM_SUDO_FILE="$pam_file" "$PROJECT_ROOT/bin/touchid.sh" enable --dry-run
+	run env MOLE_TEST_MODE=1 MOLE_PAM_SUDO_FILE="$pam_file" "$PROJECT_ROOT/bin/touchid.sh" enable --dry-run
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"DRY RUN MODE"* ]] || return 1
 
@@ -740,7 +740,7 @@ EOF
 	fake_bin="$HOME/fake-bin-perms-enable"
 	create_fake_utils "$fake_bin"
 
-	run env PATH="$fake_bin:$PATH" MOLE_PAM_SUDO_FILE="$pam_file" "$PROJECT_ROOT/bin/touchid.sh" enable
+	run env PATH="$fake_bin:$PATH" MOLE_TEST_MODE=1 MOLE_PAM_SUDO_FILE="$pam_file" "$PROJECT_ROOT/bin/touchid.sh" enable
 	[ "$status" -eq 0 ]
 	grep -q "pam_tid.so" "$pam_file"
 
@@ -759,7 +759,7 @@ EOF
 	fake_bin="$HOME/fake-bin-perms-disable"
 	create_fake_utils "$fake_bin"
 
-	run env PATH="$fake_bin:$PATH" MOLE_PAM_SUDO_FILE="$pam_file" "$PROJECT_ROOT/bin/touchid.sh" disable
+	run env PATH="$fake_bin:$PATH" MOLE_TEST_MODE=1 MOLE_PAM_SUDO_FILE="$pam_file" "$PROJECT_ROOT/bin/touchid.sh" disable
 	[ "$status" -eq 0 ]
 
 	local perms
@@ -780,7 +780,7 @@ EOF
 	create_fake_utils "$fake_bin"
 
 	run env PATH="$fake_bin:$PATH" \
-		MOLE_PAM_SUDO_FILE="$pam_file" \
+		MOLE_TEST_MODE=1 MOLE_PAM_SUDO_FILE="$pam_file" \
 		MOLE_PAM_SUDO_LOCAL_FILE="$pam_local" \
 		"$PROJECT_ROOT/bin/touchid.sh" enable
 	[ "$status" -eq 0 ]
