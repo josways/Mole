@@ -1,0 +1,45 @@
+name: Extended Quality
+
+on:
+  schedule:
+    - cron: '37 19 * * 0'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'cmd/**'
+      - 'internal/**'
+      - 'lib/core/**'
+      - 'tests/contracts/**'
+      - 'scripts/check_contract_mutations.py'
+      - '.github/workflows/quality.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contracts:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    env:
+      MOLE_TEST_NO_AUTH: '1'
+      MOLE_SKIP_FINDER_TESTS: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Race detection
+        run: go test -race ./...
+      - name: Exercise path, cache and candidate fuzzers
+        run: |
+          for target in FuzzValidatePath FuzzCacheEntry FuzzCandidateOrdering; do
+            go test ./cmd/analyze -run '^$' -fuzz "^${target}$" -fuzztime=20s -parallel=2
+          done
+      - name: Verify safety tests reject controlled mutations
+        run: python3 scripts/check_contract_mutations.py
+      - name: Record synthetic performance baseline
+        run: go test ./cmd/analyze -run '^$' -bench '^BenchmarkQuality' -benchmem -benchtime=3x -count=3

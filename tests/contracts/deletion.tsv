@@ -1,0 +1,23 @@
+# Shared minimum policy. Deliberate Shell/Analyze differences stay in docs/QUALITY_CONTRACTS.md.
+# verdict<TAB>absolute path; {HOME} is an isolated fixture, never the real home.
+reject	/
+reject	/System
+reject	/System/Library/item
+reject	/bin/item
+reject	/sbin/item
+reject	/usr/bin/item
+reject	/etc/passwd
+reject	/Library/Apple/item
+reject	/Library/Extensions/item
+reject	/Library/Keychains/item
+reject	/Applications
+reject	/Library
+reject	/Users
+reject	/Volumes
+reject	/Users/quality-contract-account
+reject	{HOME}/../item
+reject	{HOME}/critical-link/item
+accept	{HOME}/.cache/quality-contract/item
+accept	{HOME}/.cache/quality-contract/name..files
+accept	{HOME}/.cache/quality-contract/with spaces
+accept	{HOME}/.cache/quality-contract/中文
