@@ -517,13 +517,17 @@ history_load_operations() {
 
     history_reset_sessions
 
-    [[ -f "$log_file" ]] || return 0
+    [[ -f "$log_file" || -f "$log_file.old" ]] || return 0
 
-    while IFS= read -r line || [[ -n "$line" ]]; do
-        history_parse_session_start "$line" && continue
-        history_parse_session_end "$line" && continue
-        history_parse_operation_line "$line" && continue
-    done < "$log_file"
+    local generation
+    for generation in "$log_file.old" "$log_file"; do
+        [[ -f "$generation" ]] || continue
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            history_parse_session_start "$line" && continue
+            history_parse_session_end "$line" && continue
+            history_parse_operation_line "$line" && continue
+        done < "$generation"
+    done
 
     history_finish_all_sessions
 }
@@ -534,18 +538,27 @@ history_load_deletions() {
 
     history_reset_deletions
 
-    [[ -f "$log_file" ]] || return 0
+    [[ -f "$log_file" || -f "$log_file.old" ]] || return 0
 
-    while IFS= read -r line || [[ -n "$line" ]]; do
-        [[ -z "$line" ]] && continue
+    local limit
+    limit=$(history_normalize_limit "${2:-$MOLE_HISTORY_MAX_LIMIT}")
+    local -a generations=()
+    [[ ! -f "$log_file.old" ]] || generations+=("$log_file.old")
+    [[ ! -f "$log_file" ]] || generations+=("$log_file")
+    # Parse only a bounded recent window in Bash. awk streams the retained
+    # files, ignores invalid rows, and keeps at most limit records in memory.
+    while IFS= read -r line; do
         IFS=$'\t' read -r timestamp mode size_kb status path <<< "$line"
-        [[ -n "${timestamp:-}" && -n "${mode:-}" && -n "${status:-}" ]] || continue
         HISTORY_DELETE_TIMESTAMPS+=("$timestamp")
         HISTORY_DELETE_MODES+=("$mode")
         HISTORY_DELETE_SIZE_KB+=("${size_kb:-unknown}")
         HISTORY_DELETE_STATUSES+=("$status")
         HISTORY_DELETE_PATHS+=("${path:-}")
-    done < "$log_file"
+    done < <(/usr/bin/awk -F '\t' -v limit="$limit" '
+        NF >= 4 && $1 != "" && $2 != "" && $4 != "" { rows[count++ % limit] = $0 }
+        END { start = count > limit ? count - limit : 0
+              for (i = start; i < count; i++) print rows[i % limit] }
+    ' "${generations[@]}")
 }
 
 history_join_counts() {

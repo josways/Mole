@@ -3,11 +3,18 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
+	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 // TestMain keeps every test in this package off the user's real Mole logs:
@@ -169,5 +176,186 @@ func TestEscapeLogValueMatchesShellEscaping(t *testing.T) {
 	want := `a\tb\rc\x01d\x7fe\n`
 	if got != want {
 		t.Fatalf("escapeLogValue = %q, want %q", got, want)
+	}
+}
+
+func TestAnalyzeAuditStartsWithRotatedPrivateLogs(t *testing.T) {
+	opLog, delLog := enableAnalyzeLogs(t)
+	for _, path := range []string{opLog, delLog} {
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatal(err)
+		}
+		f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := f.Truncate(5<<20 + 1); err != nil {
+			t.Fatal(err)
+		}
+		if err := f.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	audit := newDeleteAudit(nil)
+	audit.begin()
+	audit.record("/tmp/example", nil)
+	audit.end()
+	for _, path := range []string{opLog, delLog} {
+		for _, name := range []string{path, path + ".old"} {
+			info, err := os.Stat(name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if info.Mode().Perm() != 0600 {
+				t.Fatalf("%s mode %o", name, info.Mode().Perm())
+			}
+		}
+		data, err := os.ReadFile(path)
+		if err != nil || !strings.Contains(string(data), "/tmp/example") {
+			t.Fatalf("new audit row missing: %v", err)
+		}
+	}
+}
+
+func TestShellAndGoAuditWritersShareRotationLock(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	path := filepath.Join(t.TempDir(), "deletions.log")
+	if err := os.WriteFile(path, []byte(strings.Repeat(" ", auditLogMaxBytes+1)+"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("/bin/bash", "--noprofile", "--norc", "-c", `
+set -euo pipefail
+source lib/core/log.sh
+_mole_write_audit_log "$1" 5242880
+for ((i=0; i<12; i++)); do _mole_write_audit_log "$1" 0 "shell-$i"; done
+`, "audit-test", path)
+	cmd.Dir = "../.."
+	// Independent logs: the child's source-time rotation must not affect the fixture.
+	cmd.Env = append(os.Environ(), "MO_NO_OPLOG=1", "MOLE_DELETE_LOG="+filepath.Join(t.TempDir(), "unused.log"))
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	errors := make(chan error, 13)
+	wg.Go(func() { errors <- writeAuditLog(path, true) })
+	for i := range 12 {
+		wg.Go(func() { errors <- appendLogLines(path, fmt.Sprintf("go-%d", i)) })
+	}
+	wg.Wait()
+	close(errors)
+	for err := range errors {
+		if err != nil {
+			t.Error(err)
+		}
+	}
+	if err := cmd.Wait(); err != nil {
+		t.Fatal(err)
+	}
+	var combined strings.Builder
+	for _, name := range []string{path + ".old", path} {
+		data, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		combined.Write(data)
+	}
+	for _, writer := range []string{"shell", "go"} {
+		for i := range 12 {
+			row := fmt.Sprintf("%s-%d\n", writer, i)
+			if strings.Count(combined.String(), row) != 1 {
+				t.Errorf("missing or duplicate row %q", row)
+			}
+		}
+	}
+}
+
+func TestAuditWriterRefusesSymlinkAndFIFO(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target")
+	if err := os.WriteFile(target, []byte("keep"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, suffix := range []string{"", ".lock"} {
+		path := filepath.Join(dir, fmt.Sprintf("log-%d", len(suffix)))
+		if err := os.Symlink(target, path+suffix); err != nil {
+			t.Fatal(err)
+		}
+		if err := appendLogLines(path, "unexpected"); err == nil {
+			t.Fatal("accepted symlink")
+		}
+	}
+	fifo := filepath.Join(dir, "fifo")
+	if err := unix.Mkfifo(fifo, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := appendLogLines(fifo, "unexpected"); err == nil {
+		t.Fatal("accepted FIFO")
+	}
+	data, err := os.ReadFile(target)
+	if err != nil || string(data) != "keep" {
+		t.Fatalf("changed symlink target: %q %v", data, err)
+	}
+}
+
+func TestAuditLockWaitIsBoundedInShellAndGo(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	path := filepath.Join(t.TempDir(), "locked.log")
+	lock, err := os.OpenFile(path+".lock", os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lock.Close() //nolint:errcheck
+	if err := unix.Flock(int(lock.Fd()), unix.LOCK_EX); err != nil {
+		t.Fatal(err)
+	}
+	defer unix.Flock(int(lock.Fd()), unix.LOCK_UN) //nolint:errcheck
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c", `
+set -euo pipefail
+source lib/core/log.sh
+if _mole_write_audit_log "$1" 0 unexpected; then exit 1; fi
+printf lock-refused
+`, "audit-test", path)
+	cmd.Dir = "../.."
+	cmd.Env = append(os.Environ(), "MO_NO_OPLOG=1", "MOLE_DELETE_LOG="+filepath.Join(t.TempDir(), "unused.log"))
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	if err := appendLogLines(path, "unexpected"); err == nil || !strings.Contains(err.Error(), "audit lock timed out") {
+		t.Fatalf("lock wait result: %v", err)
+	}
+	if time.Since(start) > 6*time.Second {
+		t.Fatal("Go audit lock wait exceeded budget")
+	}
+	if err := cmd.Wait(); err != nil || ctx.Err() != nil {
+		t.Fatalf("Shell lock wait result: %v %v", err, ctx.Err())
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("contended log was opened: %v", err)
+	}
+}
+
+func TestAuditStartMakesLegacyBackupPrivate(t *testing.T) {
+	opLog, delLog := enableAnalyzeLogs(t)
+	for _, path := range []string{opLog, delLog} {
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path+".old", []byte("legacy"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	audit := newDeleteAudit(nil)
+	audit.begin()
+	for _, path := range []string{opLog, delLog} {
+		info, err := os.Stat(path + ".old")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Mode().Perm() != 0600 {
+			t.Errorf("legacy backup remains public: %o", info.Mode().Perm())
+		}
 	}
 }

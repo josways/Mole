@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/tw93/mole/internal/userpaths"
 )
 
@@ -112,20 +114,109 @@ func logSizeText(bytes int64) string {
 	}
 }
 
-func appendLogLines(path string, lines ...string) error {
+const auditLogMaxBytes = 5 << 20
+
+// Same persistent lock inode, flock protocol, deadline and backup as log.sh.
+// All appends participate so a writer cannot keep writing an unlinked backup.
+func writeAuditLog(path string, rotate bool, lines ...string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o644)
+	openPrivate := func(name string) (*os.File, error) {
+		f, err := os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_APPEND|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0o600)
+		if err != nil {
+			return nil, err
+		}
+		info, err := f.Stat()
+		if err == nil && !info.Mode().IsRegular() {
+			err = fmt.Errorf("audit path is not a regular file")
+		}
+		if err == nil {
+			err = f.Chmod(0o600)
+		}
+		if err != nil {
+			_ = f.Close()
+			return nil, err
+		}
+		return f, nil
+	}
+	lock, err := openPrivate(path + ".lock")
 	if err != nil {
 		return err
 	}
-	_, writeErr := file.WriteString(strings.Join(lines, "\n") + "\n")
+	defer lock.Close() //nolint:errcheck
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		err = unix.Flock(int(lock.Fd()), unix.LOCK_EX|unix.LOCK_NB)
+		if err == nil {
+			break
+		}
+		if !errors.Is(err, unix.EWOULDBLOCK) && !errors.Is(err, unix.EINTR) {
+			return err
+		}
+		if !time.Now().Before(deadline) {
+			return fmt.Errorf("audit lock timed out: %w", err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	defer unix.Flock(int(lock.Fd()), unix.LOCK_UN) //nolint:errcheck
+	if rotate {
+		old, oldErr := os.OpenFile(path+".old", os.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
+		if oldErr == nil {
+			info, statErr := old.Stat()
+			if statErr == nil && !info.Mode().IsRegular() {
+				statErr = fmt.Errorf("audit backup is not a regular file")
+			}
+			if statErr == nil {
+				statErr = old.Chmod(0o600)
+			}
+			closeErr := old.Close()
+			if statErr != nil {
+				return statErr
+			}
+			if closeErr != nil {
+				return closeErr
+			}
+		} else if !os.IsNotExist(oldErr) {
+			return oldErr
+		}
+	}
+	file, err := openPrivate(path)
+	if err != nil {
+		return err
+	}
+	if rotate {
+		info, statErr := file.Stat()
+		if statErr != nil {
+			_ = file.Close()
+			return statErr
+		}
+		if info.Size() > auditLogMaxBytes {
+			if err := file.Close(); err != nil {
+				return err
+			}
+			if err := os.Rename(path, path+".old"); err != nil {
+				return err
+			}
+			file, err = openPrivate(path)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	var writeErr error
+	if len(lines) > 0 {
+		_, writeErr = file.WriteString(strings.Join(lines, "\n") + "\n")
+	}
 	closeErr := file.Close()
 	if writeErr != nil {
 		return writeErr
 	}
 	return closeErr
+}
+
+func appendLogLines(path string, lines ...string) error {
+	return writeAuditLog(path, false, lines...)
 }
 
 func (a *deleteAudit) noteError(err error) {
@@ -152,6 +243,14 @@ func (a *deleteAudit) appendOperation(lines ...string) {
 func (a *deleteAudit) begin() {
 	if a == nil {
 		return
+	}
+	if operationsLogEnabled() {
+		if path, ok := operationsLogPath(); ok {
+			a.noteError(writeAuditLog(path, true))
+		}
+	}
+	if path, ok := deletionsLogPath(); ok {
+		a.noteError(writeAuditLog(path, true))
 	}
 	stamp := time.Now().Format("2006-01-02 15:04:05")
 	a.appendOperation("", fmt.Sprintf("# ========== %s session started at %s ==========", a.commandField(), stamp))

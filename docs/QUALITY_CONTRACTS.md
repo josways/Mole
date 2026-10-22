@@ -58,8 +58,42 @@ directory is moved and no copy can shadow a newer file. It is pure and creates
 nothing. `TestLegacyLayoutMatchesShell` checks literal spaces, Unicode and shell
 metacharacters; `tests/core_paths.bats` checks invalid input and no side effects.
 New/replaced Analyze cache payloads and Status preferences use mode 0600 because
-they contain local paths or user choices. Existing directories and logs are not
-recursively chmodded. Old state remains readable at its original location.
+they contain local paths or user choices. Existing directories are not
+recursively chmodded; audit-file permissions and retention are described below.
+Old state remains readable at its original location.
+
+### Cache and audit-log budgets
+
+Analyze prunes its cache on startup and after top-level directory scans, including
+live-scan root publication and canceled live scans. Recursive subtree saves do
+not each walk the cache store. Pruning and atomic cache replacement are serialized
+within the process. The existing seven-day / 5,000-entry / 50 MiB eviction policy
+is a maintenance budget, not an instantaneous or cross-process disk quota.
+Cache reads reject nonregular files, symlinks and payloads larger than 8 MiB.
+Maintenance refuses symlink roots and unlinks direct children relative to the
+opened directory descriptor, including legacy-cache sweep workers. Replacing
+the directory pathname therefore cannot redirect pruning into another tree.
+
+Shell and Analyze audit writers use the same persistent `<log>.lock` inode and
+`flock` protocol, with a two-second lock wait, for rotation, creation and
+permission repair. Analyze also locks each append. A Shell row appended to an
+existing private regular file skips the lock and Perl, because one `O_APPEND`
+write is atomic and a row racing rotation lands in the `.old` generation that
+history reads; starting Perl per row cost about 7ms, twice per removed item.
+Audit append/rotation opens refuse symlinks and nonregular files. Active audit
+files use 0600, including existing files opened for writing; retained backups
+are also made private at rotation checks without rewriting their contents. At session
+entry, files larger than 5 MiB move to one `.old` backup. A long session may
+exceed that size until the next session. Lock files remain empty and are not
+unlinked, because replacing the lock inode would break mutual exclusion.
+Logging failures still warn once without changing a deletion outcome.
+
+History reads the retained generation before the active one, so a session split
+by another process's rotation remains readable. Deletion history uses a bounded
+streaming window before populating Shell arrays; `--limit` controls retained
+records rather than just rendering. Legacy audit files can still require a full
+streaming read. Older generations beyond the one backup are intentionally not
+retained. No log paths, record formats or `MO_NO_OPLOG` behavior change.
 
 ## Shell / Go boundary
 

@@ -810,3 +810,126 @@ echo sourced
     [[ "$output" == *"Invalid value for --limit"* ]] || return 1
     [[ "$output" != *"value too great for base"* ]]
 }
+
+@test "deletion audit rotates privately and history includes the retained generation" {
+    # The runner exports its rotation marker; this fixture models a fresh command.
+    run env -u MOLE_LOG_ROTATED HOME="$HOME" PROJECT_ROOT="$PROJECT_ROOT" MOLE_TEST_NO_AUTH=1 /bin/bash --noprofile --norc <<'EOF'
+set -euo pipefail
+log="$HOME/Library/Logs/mole/deletions.log"
+python3 - "$log" <<'PYTHON'
+import pathlib, sys
+p = pathlib.Path(sys.argv[1])
+p.write_bytes(b"\n" * (5 * 1024 * 1024) + b"2026-10-22T10:00:00+0800\ttrash\t1\tok\t/tmp/old\n")
+p.chmod(0o644)
+PYTHON
+source "$PROJECT_ROOT/lib/core/common.sh"
+_mole_delete_log trash 1 ok /tmp/new
+[[ -f "$log.old" ]] || exit 1
+python3 - "$log" "$log.old" <<'PYTHON'
+import pathlib, sys
+for name in sys.argv[1:]:
+    assert pathlib.Path(name).stat().st_mode & 0o777 == 0o600
+PYTHON
+"$PROJECT_ROOT/mole" history --json --limit 2
+EOF
+    [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+    printf '%s\n' "$output" | python3 -c 'import json,sys; rows=json.load(sys.stdin)["deletions"]; assert [r["path"] for r in rows] == ["/tmp/new", "/tmp/old"], rows'
+}
+
+@test "history retains only the requested deletion window across rotated logs" {
+    run env HOME="$HOME" PROJECT_ROOT="$PROJECT_ROOT" /bin/bash --noprofile --norc <<'EOF'
+set -euo pipefail
+source "$PROJECT_ROOT/lib/core/history.sh"
+log="$HOME/Library/Logs/mole/deletions.log"
+for ((i=0; i<300; i++)); do printf 'stamp\ttrash\t1\tok\t/tmp/%s\n' "$i"; done > "$log.old"
+printf 'stamp\ttrash\t1\tok\t/tmp/current\n' > "$log"
+history_load_deletions "$log" 2
+[[ ${#HISTORY_DELETE_PATHS[@]} -eq 2 ]] || exit 1
+[[ "${HISTORY_DELETE_PATHS[0]}" == /tmp/299 ]] || exit 1
+[[ "${HISTORY_DELETE_PATHS[1]}" == /tmp/current ]]
+EOF
+    [ "$status" -eq 0 ]
+}
+
+@test "deletion audit accepts a relative override and refuses unsafe log nodes" {
+    run env HOME="$HOME" PROJECT_ROOT="$PROJECT_ROOT" MOLE_TEST_NO_AUTH=1 /bin/bash --noprofile --norc <<'EOF'
+set -euo pipefail
+cd "$HOME"
+export MOLE_DELETE_LOG=relative.log
+source "$PROJECT_ROOT/lib/core/common.sh"
+_mole_delete_log trash 1 ok /tmp/example
+[[ -f relative.log ]] || exit 1
+grep -Fq /tmp/example relative.log || exit 1
+printf keep > target
+ln -s target linked.log
+if _mole_write_audit_log linked.log 0 changed; then exit 1; fi
+[[ "$(cat target)" == keep ]] || exit 1
+mkfifo fifo.log
+if _mole_write_audit_log fifo.log 0 changed; then exit 1; fi
+printf safe-nodes
+EOF
+    [ "$status" -eq 0 ]
+    [[ "$output" == safe-nodes ]] || return 1
+}
+
+@test "audit startup makes existing retained logs private without rewriting them" {
+    # The runner exports its rotation marker; this fixture models a fresh command.
+    run env -u MOLE_LOG_ROTATED HOME="$HOME" PROJECT_ROOT="$PROJECT_ROOT" MOLE_TEST_NO_AUTH=1 /bin/bash --noprofile --norc <<'EOF'
+set -euo pipefail
+log="$HOME/Library/Logs/mole/deletions.log"
+printf current > "$log"
+printf legacy > "$log.old"
+chmod 0644 "$log" "$log.old"
+source "$PROJECT_ROOT/lib/core/common.sh"
+python3 - "$log" "$log.old" <<'PYTHON'
+import pathlib,sys
+for name in sys.argv[1:]:
+    assert pathlib.Path(name).stat().st_mode & 0o777 == 0o600
+assert pathlib.Path(sys.argv[2]).read_text() == "legacy"
+PYTHON
+EOF
+    [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+}
+
+@test "history joins a session across rotation and reads a backup without an active deletion log" {
+    local log_dir="$HOME/Library/Logs/mole"
+    cat > "$log_dir/operations.log.old" <<'ROWS'
+# ========== clean run=20261022120000-123-1-2 session started at 2026-10-22 12:00:00 ==========
+[2026-10-22 12:00:01] [clean run=20261022120000-123-1-2] REMOVED /tmp/old (1KB)
+ROWS
+    cat > "$log_dir/operations.log" <<'ROWS'
+[2026-10-22 12:00:02] [clean run=20261022120000-123-1-2] REMOVED /tmp/new (1KB)
+# ========== clean run=20261022120000-123-1-2 session ended at 2026-10-22 12:00:03, 2 items, 2KB ==========
+ROWS
+    printf '2026-10-22T12:00:01+0800\ttrash\t1\tok\t/tmp/retained\n' > "$log_dir/deletions.log.old"
+    run "$PROJECT_ROOT/mole" history --json
+    [ "$status" -eq 0 ]
+    printf '%s\n' "$output" | python3 -c '
+import json, sys
+history = json.load(sys.stdin)
+session, = history["sessions"]
+assert session["operation_count"] == 2, session
+assert session["actions"]["removed"] == 2, session
+assert history["deletions"][0]["path"] == "/tmp/retained", history
+'
+}
+
+@test "audit rows append to an existing private log without taking the lock" {
+    run env HOME="$HOME" PROJECT_ROOT="$PROJECT_ROOT" MOLE_TEST_NO_AUTH=1 /bin/bash --noprofile --norc <<'EOF'
+set -euo pipefail
+source "$PROJECT_ROOT/lib/core/common.sh"
+log="$HOME/fast-path.log"
+_mole_write_audit_log "$log" 0 first || exit 1
+# A directory where the lock file belongs makes every locked write fail, so
+# only the lock-free append can still add the next rows.
+rm -f "$log.lock"
+mkdir "$log.lock"
+_mole_write_audit_log "$log" 0 second third || exit 2
+[[ "$(cat "$log")" == $'first\nsecond\nthird' ]] || exit 3
+# Rotation and repair still need the lock and refuse without it.
+if _mole_write_audit_log "$log" 1 rotated; then exit 4; fi
+printf fast-path
+EOF
+    [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+    [[ "$output" == fast-path ]]
+}

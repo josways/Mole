@@ -58,7 +58,7 @@ main() {
     done
 
     history_load_operations "$(history_operations_log_file)"
-    history_load_deletions "$(history_deletions_log_file)"
+    history_load_deletions "$(history_deletions_log_file)" "$HISTORY_LIMIT"
 
     if [[ "$HISTORY_JSON" == "true" ]]; then
         history_render_json "$HISTORY_LIMIT"

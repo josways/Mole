@@ -30,9 +30,15 @@ readonly LOG_MAX_SIZE_DEFAULT=1048576   # 1MB
 readonly OPLOG_MAX_SIZE_DEFAULT=5242880 # 5MB
 
 # Ensure log directory and file exist with correct ownership
-ensure_user_file "$LOG_FILE"
+(
+    umask 077
+    ensure_user_file "$LOG_FILE"
+)
 if [[ "${MO_NO_OPLOG:-}" != "1" ]]; then
-    ensure_user_file "$OPERATIONS_LOG_FILE"
+    (
+        umask 077
+        ensure_user_file "$OPERATIONS_LOG_FILE"
+    )
 fi
 
 # ============================================================================
@@ -46,7 +52,10 @@ _mole_prepare_log_append() {
     if [[ -f "$1" && -w "$1" && ${EUID:-0} -ne 0 ]]; then
         return 0
     fi
-    ensure_user_file "$1"
+    (
+        umask 077
+        ensure_user_file "$1"
+    )
 }
 
 # Surface audit-log write failures once per session. operations.log and
@@ -60,14 +69,65 @@ _mole_warn_log_broken() {
     printf 'Warning: audit log unavailable (%s). Forensic trail incomplete this session.\n' "$1" >&2
 }
 
+# Shell and Analyze share <log>.lock and BSD flock for rotation, creation and
+# repair. Keep the lock inode: unlinking it would let a new writer lock a
+# different inode during rotation. Perl is the system interpreter already used
+# by Mole's bounded probes. A rotation limit of zero only appends; an empty
+# record list only rotates.
+#
+# Appending to an existing private regular file skips the lock: one O_APPEND
+# write per call is already atomic, and a row that races a session-start
+# rotation lands in the .old generation that mo history reads too. Starting
+# Perl for every row cost about 7ms, two rows per removed item.
+_mole_write_audit_log() {
+    local path="$1" limit="$2" directory
+    shift 2
+    if [[ "$limit" == "0" && $# -gt 0 && -f "$path" && ! -L "$path" && -w "$path" && -O "$path" ]]; then
+        printf '%s\n' "$@" >> "$path" 2> /dev/null && return 0
+    fi
+    directory="${path%/*}"
+    [[ "$directory" != "$path" ]] || directory="."
+    [[ -d "$directory" ]] || mkdir -p "$directory" 2> /dev/null || return 1
+    { if [[ $# -gt 0 ]]; then printf '%s\n' "$@"; fi; } | /usr/bin/perl -e '
+        use strict;
+        use warnings;
+        use Fcntl qw(:DEFAULT :flock O_NOFOLLOW O_NONBLOCK);
+        my ($path, $limit, $records) = @ARGV;
+        sysopen(my $lock, "$path.lock", O_WRONLY|O_CREAT|O_NOFOLLOW|O_NONBLOCK, 0600) or die $!;
+        -f $lock or die "not a regular lock";
+        chmod(0600, $lock) or die $!;
+        local $SIG{ALRM} = sub { die "audit lock timed out\n" };
+        alarm 2;
+        flock($lock, LOCK_EX) or die $!;
+        alarm 0;
+        if ($limit > 0 && (-e "$path.old" || -l "$path.old")) {
+            sysopen(my $old, "$path.old", O_RDONLY|O_NOFOLLOW|O_NONBLOCK) or die $!;
+            -f $old or die "not a regular backup";
+            chmod(0600, $old) or die $!;
+            close($old) or die $!;
+        }
+        sysopen(my $log, $path, O_WRONLY|O_CREAT|O_APPEND|O_NOFOLLOW|O_NONBLOCK, 0600) or die $!;
+        -f $log or die "not a regular log";
+        chmod(0600, $log) or die $!;
+        if ($limit > 0 && -s $log > $limit) {
+            close($log) or die $!;
+            rename($path, "$path.old") or die $!;
+            sysopen($log, $path, O_WRONLY|O_CREAT|O_APPEND|O_NOFOLLOW|O_NONBLOCK, 0600) or die $!;
+        }
+        if ($records) {
+            while (my $line = <STDIN>) { print {$log} $line or die $!; }
+        }
+        close($log) or die $!;
+    ' -- "$path" "$limit" "$#" 2> /dev/null
+}
+
 append_log_line() {
     local file_path="$1"
     local line="${2:-}"
 
     if [[ "$file_path" == "$OPERATIONS_LOG_FILE" ]]; then
         _mole_escape_log_value line "$line"
-        _mole_prepare_log_append "$file_path" 2> /dev/null || true
-        printf '%s\n' "$line" >> "$file_path" 2> /dev/null ||
+        _mole_write_audit_log "$file_path" 0 "$line" ||
             _mole_warn_log_broken "write to: $file_path"
         return 0
     fi
@@ -80,14 +140,13 @@ append_log_lines() {
     shift
 
     if [[ "$file_path" == "$OPERATIONS_LOG_FILE" ]]; then
-        _mole_prepare_log_append "$file_path" 2> /dev/null || true
         local record
         local -a operation_records=()
         for record in "$@"; do
             _mole_escape_log_value record "$record"
             operation_records+=("$record")
         done
-        printf '%s\n' "${operation_records[@]+"${operation_records[@]}"}" >> "$file_path" 2> /dev/null ||
+        _mole_write_audit_log "$file_path" 0 "${operation_records[@]+"${operation_records[@]}"}" ||
             _mole_warn_log_broken "write to: $file_path"
         return 0
     fi
@@ -107,21 +166,23 @@ rotate_log_once() {
         size=$(get_file_size "$LOG_FILE")
         if [[ "$size" -gt "$max_size" ]]; then
             mv "$LOG_FILE" "${LOG_FILE}.old" 2> /dev/null || true
-            ensure_user_file "$LOG_FILE"
+            (
+                umask 077
+                ensure_user_file "$LOG_FILE"
+            )
         fi
     fi
 
-    # Rotate operations log (5MB limit)
+    # Audit files share the same retention and locking contract with Analyze.
     if [[ "${MO_NO_OPLOG:-}" != "1" ]]; then
-        local oplog_max_size="$OPLOG_MAX_SIZE_DEFAULT"
-        if [[ -f "$OPERATIONS_LOG_FILE" ]]; then
-            local size
-            size=$(get_file_size "$OPERATIONS_LOG_FILE")
-            if [[ "$size" -gt "$oplog_max_size" ]]; then
-                mv "$OPERATIONS_LOG_FILE" "${OPERATIONS_LOG_FILE}.old" 2> /dev/null || true
-                ensure_user_file "$OPERATIONS_LOG_FILE"
-            fi
-        fi
+        _mole_write_audit_log "$OPERATIONS_LOG_FILE" "$OPLOG_MAX_SIZE_DEFAULT" ||
+            _mole_warn_log_broken "rotate: $OPERATIONS_LOG_FILE"
+    fi
+    local deletion_log="${MOLE_DELETE_LOG:-$HOME/Library/Logs/mole/deletions.log}"
+    # Keep source-only/read-only commands from creating a deletion log.
+    if [[ -e "$deletion_log" || -L "$deletion_log" ]]; then
+        _mole_write_audit_log "$deletion_log" "$OPLOG_MAX_SIZE_DEFAULT" ||
+            _mole_warn_log_broken "rotate: $deletion_log"
     fi
 }
 
@@ -448,7 +509,10 @@ log_system_info() {
     export MOLE_SYS_INFO_LOGGED=1
 
     # Reset debug log file for this new session
-    ensure_user_file "$DEBUG_LOG_FILE"
+    (
+        umask 077
+        ensure_user_file "$DEBUG_LOG_FILE"
+    )
     if ! : > "$DEBUG_LOG_FILE" 2> /dev/null; then
         echo -e "${YELLOW}${ICON_WARNING}${NC} Debug log not writable: $DEBUG_LOG_FILE" >&2
     fi

@@ -29,9 +29,8 @@ _mole_delete_log() {
     _mole_escape_log_value size_kb "$size_kb"
     _mole_escape_log_value status "$status"
     _mole_escape_log_value target "$target"
-    if ! printf '%s\t%s\t%s\t%s\t%s\n' \
-        "$ts" "$mode" "$size_kb" "$status" "$target" \
-        >> "$log_file" 2> /dev/null; then
+    local row
+    printf -v row '%s\t%s\t%s\t%s\t%s' "$ts" "$mode" "$size_kb" "$status" "$target"
+    _mole_write_audit_log "$log_file" 0 "$row" ||
         _mole_warn_log_broken "write to: $log_file"
-    fi
 }
