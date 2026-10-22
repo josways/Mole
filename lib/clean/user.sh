@@ -3080,6 +3080,8 @@ _large_prefetch_queue_rows() {
         "$HOME/Library/Application Support/MobileSync/Backup" \
         "$HOME/Library/Mail" \
         "$HOME/Library/Mail Downloads" \
+        "$HOME/Conductor/workspaces" \
+        "$HOME/Conductor/archived-contexts" \
         "$HOME/Library/Updates" \
         "$HOME/Library/Developer/Xcode/Archives" \
         "$HOME/Library/Containers/com.docker.docker/Data" \
@@ -3390,6 +3392,12 @@ _check_large_file_candidates_body() {
 
     _report_large_or_stop "Mail data" "$HOME/Library/Mail" || return $?
     _report_large_or_stop "Mail downloads" "$HOME/Library/Mail Downloads" || return $?
+
+    # Conductor workspaces and archived chats are authored state, not caches.
+    # Report occupied space only; age or a missing worktree registration does
+    # not establish that local changes, commits, or context are disposable.
+    _report_large_or_stop "Conductor workspaces" "$HOME/Conductor/workspaces" || return $?
+    _report_large_or_stop "Conductor archived contexts" "$HOME/Conductor/archived-contexts" || return $?
 
     local installer_path
     for installer_path in /Applications/Install\ macOS*.app; do
