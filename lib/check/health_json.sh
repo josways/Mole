@@ -112,7 +112,8 @@ generate_health_json() {
     # System info
     read -r mem_used mem_total <<< "$(get_memory_info)"
     read -r disk_used disk_total disk_percent <<< "$(get_disk_info)"
-    local uptime=$(get_uptime_days)
+    local uptime
+    uptime=$(get_uptime_days)
 
     # Ensure all values are valid numbers (fallback to 0)
     mem_used=${mem_used:-0}

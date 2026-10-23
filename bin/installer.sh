@@ -458,7 +458,8 @@ select_installers() {
         fi
     }
 
-    local items_per_page=$(_get_items_per_page)
+    local items_per_page
+    items_per_page=$(_get_items_per_page)
     local cursor_pos=0
     local top_index=0
 

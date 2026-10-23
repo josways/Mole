@@ -1170,13 +1170,17 @@ find_app_files() {
     # Normalize app name for matching - generate all common naming variants
     # Apps use inconsistent naming: "Maestro Studio" vs "maestro-studio" vs "MaestroStudio"
     # Note: Using tr for lowercase conversion (Bash 3.2 compatible, no ${var,,} support)
-    local nospace_name="${app_name// /}"                                                        # "Maestro Studio" -> "MaestroStudio"
-    local underscore_name="${app_name// /_}"                                                    # "Maestro Studio" -> "Maestro_Studio"
-    local hyphen_name="${app_name// /-}"                                                        # "Maestro Studio" -> "Maestro-Studio"
-    local lowercase_name=$(echo "$app_name" | /usr/bin/tr '[:upper:]' '[:lower:]')              # "Zed Nightly" -> "zed nightly"
-    local lowercase_nospace=$(echo "$nospace_name" | /usr/bin/tr '[:upper:]' '[:lower:]')       # "MaestroStudio" -> "maestrostudio"
-    local lowercase_hyphen=$(echo "$hyphen_name" | /usr/bin/tr '[:upper:]' '[:lower:]')         # "Maestro-Studio" -> "maestro-studio"
-    local lowercase_underscore=$(echo "$underscore_name" | /usr/bin/tr '[:upper:]' '[:lower:]') # "Maestro_Studio" -> "maestro_studio"
+    local nospace_name="${app_name// /}"     # "Maestro Studio" -> "MaestroStudio"
+    local underscore_name="${app_name// /_}" # "Maestro Studio" -> "Maestro_Studio"
+    local hyphen_name="${app_name// /-}"     # "Maestro Studio" -> "Maestro-Studio"
+    local lowercase_name
+    lowercase_name=$(echo "$app_name" | /usr/bin/tr '[:upper:]' '[:lower:]') # "Zed Nightly" -> "zed nightly"
+    local lowercase_nospace
+    lowercase_nospace=$(echo "$nospace_name" | /usr/bin/tr '[:upper:]' '[:lower:]') # "MaestroStudio" -> "maestrostudio"
+    local lowercase_hyphen
+    lowercase_hyphen=$(echo "$hyphen_name" | /usr/bin/tr '[:upper:]' '[:lower:]') # "Maestro-Studio" -> "maestro-studio"
+    local lowercase_underscore
+    lowercase_underscore=$(echo "$underscore_name" | /usr/bin/tr '[:upper:]' '[:lower:]') # "Maestro_Studio" -> "maestro_studio"
 
     # Extract base name by removing common version/channel suffixes
     # "Zed Nightly" -> "Zed", "Firefox Developer Edition" -> "Firefox"
@@ -1186,7 +1190,8 @@ find_app_files() {
     if [[ "$app_name" =~ ^(.+)[[:space:]]+(${version_suffixes})$ ]]; then
         base_name="${BASH_REMATCH[1]}"
     fi
-    local base_lowercase=$(echo "$base_name" | /usr/bin/tr '[:upper:]' '[:lower:]') # "Zed" -> "zed"
+    local base_lowercase
+    base_lowercase=$(echo "$base_name" | /usr/bin/tr '[:upper:]' '[:lower:]') # "Zed" -> "zed"
 
     # Only use bundle_id in literal paths or find patterns after reverse-DNS
     # validation. A malformed Info.plist should not be able to traverse out of
@@ -2003,10 +2008,14 @@ find_app_system_files() {
     local nospace_name="${app_name// /}"
     local underscore_name="${app_name// /_}"
     local hyphen_name="${app_name// /-}"
-    local lowercase_name=$(echo "$app_name" | /usr/bin/tr '[:upper:]' '[:lower:]')
-    local lowercase_nospace=$(echo "$nospace_name" | /usr/bin/tr '[:upper:]' '[:lower:]')
-    local lowercase_hyphen=$(echo "$hyphen_name" | /usr/bin/tr '[:upper:]' '[:lower:]')
-    local lowercase_underscore=$(echo "$underscore_name" | /usr/bin/tr '[:upper:]' '[:lower:]')
+    local lowercase_name
+    lowercase_name=$(echo "$app_name" | /usr/bin/tr '[:upper:]' '[:lower:]')
+    local lowercase_nospace
+    lowercase_nospace=$(echo "$nospace_name" | /usr/bin/tr '[:upper:]' '[:lower:]')
+    local lowercase_hyphen
+    lowercase_hyphen=$(echo "$hyphen_name" | /usr/bin/tr '[:upper:]' '[:lower:]')
+    local lowercase_underscore
+    lowercase_underscore=$(echo "$underscore_name" | /usr/bin/tr '[:upper:]' '[:lower:]')
 
     # Standard system path patterns
     local -a system_patterns=(

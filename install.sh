@@ -1516,8 +1516,10 @@ install_files() {
     fi
 
     if [[ -d "$SOURCE_DIR/bin" ]]; then
-        local source_bin_abs="$(cd "$SOURCE_DIR/bin" && pwd)"
-        local config_bin_abs="$(cd "$CONFIG_DIR/bin" && pwd)"
+        local source_bin_abs
+        source_bin_abs="$(cd "$SOURCE_DIR/bin" && pwd)" || true
+        local config_bin_abs
+        config_bin_abs="$(cd "$CONFIG_DIR/bin" && pwd)" || true
         if [[ "$source_bin_abs" != "$config_bin_abs" ]]; then
             local -a bin_files=("$SOURCE_DIR/bin"/*)
             if [[ ${#bin_files[@]} -gt 0 ]]; then
@@ -1530,8 +1532,10 @@ install_files() {
     fi
 
     if [[ -d "$SOURCE_DIR/lib" ]]; then
-        local source_lib_abs="$(cd "$SOURCE_DIR/lib" && pwd)"
-        local config_lib_abs="$(cd "$CONFIG_DIR/lib" && pwd)"
+        local source_lib_abs
+        source_lib_abs="$(cd "$SOURCE_DIR/lib" && pwd)" || true
+        local config_lib_abs
+        config_lib_abs="$(cd "$CONFIG_DIR/lib" && pwd)" || true
         if [[ "$source_lib_abs" != "$config_lib_abs" ]]; then
             local -a lib_files=("$SOURCE_DIR/lib"/*)
             if [[ ${#lib_files[@]} -gt 0 ]]; then

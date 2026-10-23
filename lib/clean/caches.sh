@@ -862,7 +862,8 @@ _process_project_cache_matches_indexed() {
                     [[ $tracked_rc -le 128 ]] || return "$tracked_rc"
                     [[ $tracked_rc -ne 0 ]] || continue
                     clean_project_cache_target "$cache_dir" "Flutter build cache (.dart_tool)" || return $?
-                    local build_dir="$(dirname "$cache_dir")/build"
+                    local build_dir
+                    build_dir="$(dirname "$cache_dir")/build"
                     if [[ -d "$build_dir" ]]; then
                         local nested_rc=0
                         _project_cache_holds_nested_repo "$build_dir" || nested_rc=$?

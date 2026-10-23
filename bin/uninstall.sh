@@ -157,11 +157,13 @@ _uninstall_lproj_candidates() {
     printf '%s\n' "$base"
 }
 
-readonly MOLE_UNINSTALL_PREFERRED_LANGS="$(mole_uninstall_preferred_languages)"
+MOLE_UNINSTALL_PREFERRED_LANGS="$(mole_uninstall_preferred_languages)" || true
+readonly MOLE_UNINSTALL_PREFERRED_LANGS
 # Display names depend on the ordered language list. Keep the fingerprint in
 # each cache row so a language change invalidates only the derived name while
 # size and last-used metadata remain reusable.
-readonly MOLE_UNINSTALL_LANGUAGE_SIGNATURE="$(printf '%s' "$MOLE_UNINSTALL_PREFERRED_LANGS" | cksum | awk '{print $1 ":" $2}')"
+MOLE_UNINSTALL_LANGUAGE_SIGNATURE="$(printf '%s' "$MOLE_UNINSTALL_PREFERRED_LANGS" | cksum | awk '{print $1 ":" $2}')"
+readonly MOLE_UNINSTALL_LANGUAGE_SIGNATURE
 
 # The bundle's own name for a locale, read from the same InfoPlist.strings that
 # Finder consults. Prints nothing when the bundle does not localize the name,
@@ -2243,7 +2245,8 @@ main() {
         local max_last_width=0
         for selected_app in "${selected_apps[@]}"; do
             IFS='|' read -r _ app_path app_name _ size last_used _ <<< "$selected_app"
-            local name_width=$(get_display_width "$app_name")
+            local name_width
+            name_width=$(get_display_width "$app_name")
             [[ $name_width -gt $max_name_display_width ]] && max_name_display_width=$name_width
             local size_display
             size_display=$(uninstall_normalize_size_display "$size" "$app_path")
@@ -2256,7 +2259,8 @@ main() {
         ((max_last_width < 5)) && max_last_width=5
         ((max_name_display_width < 16)) && max_name_display_width=16
 
-        local term_width=$(tput cols 2> /dev/null || echo 100)
+        local term_width
+        term_width=$(tput cols 2> /dev/null || echo 100)
         local available_for_name=$((term_width - 17 - max_size_width - max_last_width))
 
         local min_name_width=24

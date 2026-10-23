@@ -39,7 +39,8 @@ _pm_get_terminal_height() {
 
 # Calculate dynamic items per page based on terminal height
 _pm_calculate_items_per_page() {
-    local term_height=$(_pm_get_terminal_height)
+    local term_height
+    term_height=$(_pm_get_terminal_height)
     # Header + two blank rows + two control rows + a cursor row, so the final
     # newline cannot scroll the header away. Narrow controls may wrap again.
     local reserved=6
@@ -93,7 +94,8 @@ paginated_multi_select() {
     fi
 
     local total_items=${#items[@]}
-    local items_per_page=$(_pm_calculate_items_per_page)
+    local items_per_page
+    items_per_page=$(_pm_calculate_items_per_page)
     local cursor_pos=0
     local top_index=0
     local sort_mode="${MOLE_MENU_SORT_MODE:-date}" # date|name|size

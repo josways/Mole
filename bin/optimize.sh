@@ -128,12 +128,18 @@ show_optimization_summary() {
 show_system_health() {
     local health_json="$1"
 
-    local mem_used=$(json_get_value "$health_json" "memory_used_gb")
-    local mem_total=$(json_get_value "$health_json" "memory_total_gb")
-    local disk_used=$(json_get_value "$health_json" "disk_used_gb")
-    local disk_total=$(json_get_value "$health_json" "disk_total_gb")
-    local disk_percent=$(json_get_value "$health_json" "disk_used_percent")
-    local uptime=$(json_get_value "$health_json" "uptime_days")
+    local mem_used
+    mem_used=$(json_get_value "$health_json" "memory_used_gb")
+    local mem_total
+    mem_total=$(json_get_value "$health_json" "memory_total_gb")
+    local disk_used
+    disk_used=$(json_get_value "$health_json" "disk_used_gb")
+    local disk_total
+    disk_total=$(json_get_value "$health_json" "disk_total_gb")
+    local disk_percent
+    disk_percent=$(json_get_value "$health_json" "disk_used_percent")
+    local uptime
+    uptime=$(json_get_value "$health_json" "uptime_days")
 
     mem_used=${mem_used:-0}
     mem_total=${mem_total:-0}
@@ -286,7 +292,8 @@ main() {
     if [[ ${#CURRENT_WHITELIST_PATTERNS[@]} -gt 0 ]]; then
         local count=${#CURRENT_WHITELIST_PATTERNS[@]}
         if [[ $count -le 3 ]]; then
-            local patterns_list=$(
+            local patterns_list
+            patterns_list=$(
                 IFS=', '
                 echo "${CURRENT_WHITELIST_PATTERNS[*]}"
             )

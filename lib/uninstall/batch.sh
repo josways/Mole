@@ -1840,7 +1840,8 @@ _batch_scan_app_details_impl() {
     # producer probes clamp themselves to this deadline.
     local _MOLE_UNINSTALL_DISCOVERY_DEADLINE="${_MOLE_UNINSTALL_DISCOVERY_DEADLINE:-$((SECONDS + (2 * MOLE_TIMEOUT_DISK_VERIFY_SEC)))}"
     # Cache current user outside loop
-    local current_user=$(whoami)
+    local current_user
+    current_user=$(whoami)
 
     if [[ -t 1 ]]; then start_inline_spinner "Scanning files..."; fi
     # shellcheck disable=SC2154 # selected_apps is provided by batch_uninstall_applications via dynamic scope.
@@ -2053,7 +2054,8 @@ _batch_scan_app_details_impl() {
         # file_ops can retry a TCC-blocked rename through unprivileged Finder.
         # Permanent removal still treats foreign ownership as requiring sudo.
         local needs_sudo=false
-        local app_owner=$(get_file_owner "$app_path")
+        local app_owner
+        app_owner=$(get_file_owner "$app_path")
         local delete_mode="${MOLE_DELETE_MODE:-permanent}"
         if [[ ! -w "$(dirname "$app_path")" ]] ||
             { [[ "$delete_mode" != "trash" ]] &&
@@ -2254,14 +2256,16 @@ _batch_preview_and_confirm() {
     local -a _review_personal_paths=() _review_selected_paths=()
     _uninstall_prepare_data_review || return $?
     while true; do
-        local size_display=$(bytes_to_human "$((total_estimated_size * 1024))")
+        local size_display
+        size_display=$(bytes_to_human "$((total_estimated_size * 1024))")
 
         echo -e "\n${PURPLE_BOLD}Files to be removed:${NC}"
 
         local review_index=0
         for detail in "${app_details[@]}"; do
             IFS='|' read -r app_name app_path bundle_id total_kb encoded_files encoded_system_files has_sensitive_data needs_sudo_flag is_brew_cask cask_name encoded_diag_system encoded_review_system encoded_login_item_helpers sibling_guard _expected_app_identity _original_bundle_id _encoded_live_sibling_fingerprint _expected_info_identity <<< "$detail"
-            local app_size_display=$(bytes_to_human "$((total_kb * 1024))")
+            local app_size_display
+            app_size_display=$(bytes_to_human "$((total_kb * 1024))")
 
             local brew_tag=""
             [[ "$is_brew_cask" == "true" ]] && brew_tag=" ${CYAN}[Brew]${NC}"
@@ -2275,7 +2279,8 @@ _batch_preview_and_confirm() {
             echo -e "${BLUE}${ICON_CONFIRM}${NC} ${display_app_name}${brew_tag} ${GRAY}, ${app_size_display}${NC}"
 
             # Show detailed file list for ALL apps (brew casks leave user data behind)
-            local system_files=$(decode_file_list "$encoded_system_files" "$app_name")
+            local system_files
+            system_files=$(decode_file_list "$encoded_system_files" "$app_name")
             local diag_system_display
             diag_system_display=$(decode_file_list "$encoded_diag_system" "$app_name")
             local review_system_display
@@ -2447,11 +2452,16 @@ _batch_execute_removals() {
     for detail in "${app_details[@]}"; do
         current_index=$((current_index + 1))
         IFS='|' read -r app_name app_path bundle_id total_kb encoded_files encoded_system_files has_sensitive_data needs_sudo is_brew_cask cask_name encoded_diag_system encoded_review_system encoded_login_item_helpers sibling_guard expected_app_identity original_bundle_id encoded_live_sibling_fingerprint expected_info_identity <<< "$detail"
-        local related_files=$(decode_file_list "$encoded_files" "$app_name")
-        local system_files=$(decode_file_list "$encoded_system_files" "$app_name")
-        local diag_system=$(decode_file_list "$encoded_diag_system" "$app_name")
-        local review_only_system_files=$(decode_file_list "$encoded_review_system" "$app_name")
-        local login_item_helpers=$(decode_bundle_id_list "$encoded_login_item_helpers" "$app_name")
+        local related_files
+        related_files=$(decode_file_list "$encoded_files" "$app_name")
+        local system_files
+        system_files=$(decode_file_list "$encoded_system_files" "$app_name")
+        local diag_system
+        diag_system=$(decode_file_list "$encoded_diag_system" "$app_name")
+        local review_only_system_files
+        review_only_system_files=$(decode_file_list "$encoded_review_system" "$app_name")
+        local login_item_helpers
+        login_item_helpers=$(decode_bundle_id_list "$encoded_login_item_helpers" "$app_name")
         local reason=""
         local suggestion=""
         # Dynamic scope keeps actual refusal evidence inside this app's attempt.

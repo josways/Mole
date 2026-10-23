@@ -107,7 +107,8 @@ select_apps_for_uninstall() {
     # Build menu options
     # Show loading for large lists (formatting can be slow due to width calculations)
     local app_count=${#apps_data[@]}
-    local terminal_width=$(tput cols 2> /dev/null || echo 80)
+    local terminal_width
+    terminal_width=$(tput cols 2> /dev/null || echo 80)
     # The uninstall scan already left a "Preparing app list..." line on its
     # alternate screen.
     if [[ $app_count -gt 100 && "${MOLE_ALT_SCREEN_ACTIVE:-}" != "1" ]]; then
@@ -120,7 +121,8 @@ select_apps_for_uninstall() {
     local max_name_width=0
     for app_data in "${apps_data[@]}"; do
         IFS='|' read -r _ _ display_name _ _ _ _ <<< "$app_data"
-        local name_width=$(get_display_width "$display_name")
+        local name_width
+        name_width=$(get_display_width "$display_name")
         [[ $name_width -gt $max_name_width ]] && max_name_width=$name_width
     done
     # Constrain based on terminal width: fixed=28 (prefix 4-6 + space 1 + size 9 + sep 3 + max_last 9)

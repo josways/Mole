@@ -31,7 +31,8 @@ _ms_get_terminal_height() {
 
 # Calculate dynamic items per page based on terminal height
 _ms_calculate_items_per_page() {
-    local term_height=$(_ms_get_terminal_height)
+    local term_height
+    term_height=$(_ms_get_terminal_height)
     # Layout: header(1) + spacing(1) + items + spacing(1) + footer(1) + clear(1) = 5 fixed lines
     local reserved=6 # Increased to prevent header from being overwritten
     local available=$((term_height - reserved))
@@ -63,7 +64,8 @@ paginated_multi_select() {
     fi
 
     local total_items=${#items[@]}
-    local items_per_page=$(_ms_calculate_items_per_page)
+    local items_per_page
+    items_per_page=$(_ms_calculate_items_per_page)
     local cursor_pos=0
     local top_index=0
     local -a selected=()
@@ -238,7 +240,8 @@ paginated_multi_select() {
     # Main interaction loop
     while true; do
         draw_menu
-        local key=$(read_key)
+        local key
+        key=$(read_key) || true
 
         case "$key" in
             "QUIT")

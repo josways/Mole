@@ -2792,7 +2792,8 @@ _mole_move_to_trash() {
     if [[ -n "${MOLE_TEST_TRASH_DIR:-}" ]] &&
         [[ "${MOLE_TEST_MODE:-0}" == "1" || "${MOLE_TEST_NO_AUTH:-0}" == "1" ]]; then
         mkdir -p "$MOLE_TEST_TRASH_DIR" 2> /dev/null || return 1
-        local dest="$MOLE_TEST_TRASH_DIR/$(basename "$path").$$.$(date +%s 2> /dev/null || echo 0)"
+        local dest
+        dest="$MOLE_TEST_TRASH_DIR/$(basename "$path").$$.$(date +%s 2> /dev/null || echo 0)"
         _mole_trash_target_still_safe "$path" "$expected_parent" \
             "$expected_parent_id" "$expected_target_id" "$expected_file_sha256" || return $?
         _mole_owned_path_still_valid "$path" \

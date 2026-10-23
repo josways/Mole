@@ -282,7 +282,8 @@ uuid() {
         uuidgen
     else
         # Fallback pseudo UUID in format: 8-4-4-4-12
-        local hex=$(openssl rand -hex 16)
+        local hex
+        hex=$(openssl rand -hex 16)
         echo "${hex:0:8}-${hex:8:4}-${hex:12:4}-${hex:16:4}-${hex:20:12}"
     fi
 }
@@ -309,7 +310,8 @@ create_alfred_workflow() {
         bundle="fun.tw93.mole.${subcommand}"
         keyword="${subcommand}"
         command="\"${mo_bin}\" ${subcommand}"
-        local workflow_uid="user.workflow.$(uuid | LC_ALL=C tr '[:upper:]' '[:lower:]')"
+        local workflow_uid
+        workflow_uid="user.workflow.$(uuid | LC_ALL=C tr '[:upper:]' '[:lower:]')"
         local input_uid
         local action_uid
         input_uid="$(uuid)"

@@ -414,7 +414,8 @@ scan_installed_apps() {
     if [[ $cache_publish_status -ne 0 ]]; then
         debug_log "Warning: Failed to publish installed application cache; using current scan"
     fi
-    local app_count=$(wc -l < "$installed_bundles" 2> /dev/null | tr -d ' ')
+    local app_count
+    app_count=$(wc -l < "$installed_bundles" 2> /dev/null | tr -d ' ') || true
     debug_log "Scanned $app_count unique applications"
 }
 # Sensitive data patterns that should never be treated as orphaned
@@ -495,7 +496,8 @@ is_bundle_orphaned() {
 
     # 5. Fast path: 30-day modification check (stat call, fast)
     if [[ -e "$directory_path" ]]; then
-        local last_modified_epoch=$(get_file_mtime "$directory_path")
+        local last_modified_epoch
+        last_modified_epoch=$(get_file_mtime "$directory_path")
         local current_epoch
         current_epoch=$(get_epoch_seconds)
         local days_since_modified=$(((current_epoch - last_modified_epoch) / 86400))
@@ -695,7 +697,8 @@ clean_orphaned_app_data() {
         return 0
     fi
     stop_section_spinner
-    local app_count=$(wc -l < "$installed_bundles" 2> /dev/null | tr -d ' ')
+    local app_count
+    app_count=$(wc -l < "$installed_bundles" 2> /dev/null | tr -d ' ') || true
     debug_log "Found $app_count active/installed apps"
     local orphaned_count=0
     local total_orphaned_kb=0
@@ -894,7 +897,8 @@ clean_orphaned_app_data() {
     done
     stop_section_spinner
     if [[ $orphaned_count -gt 0 ]]; then
-        local orphaned_mb=$(echo "$total_orphaned_kb" | awk '{printf "%.1f", $1/1024}')
+        local orphaned_mb
+        orphaned_mb=$(echo "$total_orphaned_kb" | awk '{printf "%.1f", $1/1024}')
         if [[ "${DRY_RUN:-false}" == "true" ]]; then
             echo -e "  ${YELLOW}${ICON_DRY_RUN}${NC} Would clean $orphaned_count items, about ${orphaned_mb}MB"
         else

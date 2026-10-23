@@ -1462,7 +1462,8 @@ select_purge_categories() {
         fi
     }
 
-    local items_per_page=$(_get_items_per_page)
+    local items_per_page
+    items_per_page=$(_get_items_per_page)
     local cursor_pos=0
     local top_index=0
     local search_query="" search_message=""
@@ -3018,15 +3019,18 @@ clean_project_artifacts() {
         return 0
     fi
     # Set global vars for selector
-    export PURGE_CATEGORY_SIZES=$(
+    export PURGE_CATEGORY_SIZES
+    PURGE_CATEGORY_SIZES=$(
         IFS=,
         echo "${item_sizes[*]-}"
     )
-    export PURGE_RECENT_CATEGORIES=$(
+    export PURGE_RECENT_CATEGORIES
+    PURGE_RECENT_CATEGORIES=$(
         IFS=,
         echo "${item_recent_flags[*]-}"
     )
-    export PURGE_AGE_LABELS=$(
+    export PURGE_AGE_LABELS
+    PURGE_AGE_LABELS=$(
         IFS=,
         echo "${item_age_labels[*]-}"
     )

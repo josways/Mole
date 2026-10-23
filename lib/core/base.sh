@@ -828,7 +828,8 @@ mole_wait_for_any_worker() {
 get_optimal_parallel_jobs() {
     local operation_type="${1:-default}"
     if [[ -z "${MOLE_CPU_CORES_CACHE:-}" ]]; then
-        export MOLE_CPU_CORES_CACHE=$(sysctl -n hw.ncpu 2> /dev/null || echo 4)
+        export MOLE_CPU_CORES_CACHE
+        MOLE_CPU_CORES_CACHE=$(sysctl -n hw.ncpu 2> /dev/null || echo 4)
     fi
     local cpu_cores="$MOLE_CPU_CORES_CACHE"
     case "$operation_type" in
@@ -1650,7 +1651,8 @@ is_ansi_supported() {
             # Check terminfo database if available
             if command -v tput > /dev/null 2>&1; then
                 # Test if terminal supports colors (good proxy for ANSI support)
-                local colors=$(tput colors 2> /dev/null || echo "0")
+                local colors
+                colors=$(tput colors 2> /dev/null || echo "0")
                 if [[ "$colors" -ge 8 ]]; then
                     export MOLE_ANSI_SUPPORTED_CACHE=0
                     return 0

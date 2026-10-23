@@ -1945,7 +1945,8 @@ perform_cleanup() {
             else
                 potential_label="$freed_size_human"
             fi
-            local stats="Potential space: $(colorize_human_size "$potential_label")"
+            local stats
+            stats="Potential space: $(colorize_human_size "$potential_label")"
             [[ $files_cleaned -gt 0 ]] && stats+=" | Items: $files_cleaned"
             [[ $total_items -gt 0 ]] && stats+=" | Categories: $total_items"
             summary_details+=("$stats")
@@ -1968,7 +1969,8 @@ perform_cleanup() {
                     freed_size_human="Partially measured"
                 fi
             fi
-            local summary_line="Tracked cleanup: $(colorize_human_size "$freed_size_human")"
+            local summary_line
+            summary_line="Tracked cleanup: $(colorize_human_size "$freed_size_human")"
 
             if [[ $files_cleaned -gt 0 ]]; then
                 summary_line+=" | Items cleaned: $files_cleaned"
