@@ -183,10 +183,10 @@ paginated_multi_select() {
         printf "${clear_line}${PURPLE_BOLD}%s${NC}  ${GRAY}%d/%d selected${NC}\n" "${title}" "$selected_count" "$total_items" >&2
 
         if [[ $total_items -eq 0 ]]; then
-            printf "${clear_line}${GRAY}No items available${NC}\n" >&2
-            printf "${clear_line}\n" >&2
-            printf "${clear_line}${GRAY}Q${NC} Quit\n" >&2
-            printf "${clear_line}" >&2
+            printf '%b' "${clear_line}${GRAY}No items available${NC}\n" >&2
+            printf '%b' "${clear_line}\n" >&2
+            printf '%b' "${clear_line}${GRAY}Q${NC} Quit\n" >&2
+            printf '%b' "${clear_line}" >&2
             return
         fi
 
@@ -206,7 +206,7 @@ paginated_multi_select() {
             [[ $cursor_pos -lt 0 ]] && cursor_pos=0
         fi
 
-        printf "${clear_line}\n" >&2
+        printf '%b' "${clear_line}\n" >&2
 
         # Items for current window
         local start_idx=$top_index
@@ -224,15 +224,15 @@ paginated_multi_select() {
         local items_shown=$((end_idx - start_idx + 1))
         [[ $items_shown -lt 0 ]] && items_shown=0
         for ((i = items_shown; i < items_per_page; i++)); do
-            printf "${clear_line}\n" >&2
+            printf '%b' "${clear_line}\n" >&2
         done
 
         # Clear any remaining lines at bottom
-        printf "${clear_line}\n" >&2
-        printf "${clear_line}${GRAY}${ICON_NAV_UP}${ICON_NAV_DOWN} | Space | Enter Save | Q Cancel${NC}\n" >&2
+        printf '%b' "${clear_line}\n" >&2
+        printf '%b' "${clear_line}${GRAY}${ICON_NAV_UP}${ICON_NAV_DOWN} | Space | Enter Save | Q Cancel${NC}\n" >&2
 
         # Clear one more line to ensure no artifacts
-        printf "${clear_line}" >&2
+        printf '%b' "${clear_line}" >&2
     }
 
     # Main interaction loop

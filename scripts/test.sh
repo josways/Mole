@@ -88,8 +88,8 @@ enforce_timeout_dependency_in_ci() {
         return 0
     fi
 
-    printf "${RED}${ICON_ERROR} Missing timeout binary (gtimeout/timeout) in CI${NC}\n"
-    printf "${YELLOW}${ICON_WARNING} Install coreutils to provide gtimeout${NC}\n"
+    printf '%b' "${RED}${ICON_ERROR} Missing timeout binary (gtimeout/timeout) in CI${NC}\n"
+    printf '%b' "${YELLOW}${ICON_WARNING} Install coreutils to provide gtimeout${NC}\n"
     exit 1
 }
 
@@ -108,9 +108,9 @@ report_slowest_test_files() {
 
 report_unit_result() {
     if [[ $1 -eq 0 ]]; then
-        printf "${GREEN}${ICON_SUCCESS} Unit tests passed${NC}\n"
+        printf '%b' "${GREEN}${ICON_SUCCESS} Unit tests passed${NC}\n"
     else
-        printf "${RED}${ICON_ERROR} Unit tests failed${NC}\n"
+        printf '%b' "${RED}${ICON_ERROR} Unit tests failed${NC}\n"
         FAILED=$((FAILED + 1))
     fi
 }
@@ -157,16 +157,16 @@ if command -v shellcheck > /dev/null 2>&1; then
     done < <(find tests -type d -path 'tests/tmp-*' -prune -o -type f \( -name '*.bats' -o -name '*.bash' -o -name '*.sh' \) -print | sort)
     if [[ ${#TEST_FILES[@]} -gt 0 ]]; then
         if shellcheck --rcfile "$PROJECT_ROOT/.shellcheckrc" "${TEST_FILES[@]}"; then
-            printf "${GREEN}${ICON_SUCCESS} Test script lint passed${NC}\n"
+            printf '%b' "${GREEN}${ICON_SUCCESS} Test script lint passed${NC}\n"
         else
-            printf "${RED}${ICON_ERROR} Test script lint failed${NC}\n"
+            printf '%b' "${RED}${ICON_ERROR} Test script lint failed${NC}\n"
             FAILED=$((FAILED + 1))
         fi
     else
-        printf "${YELLOW}${ICON_WARNING} No test scripts found, skipping${NC}\n"
+        printf '%b' "${YELLOW}${ICON_WARNING} No test scripts found, skipping${NC}\n"
     fi
 else
-    printf "${YELLOW}${ICON_WARNING} shellcheck not installed, skipping${NC}\n"
+    printf '%b' "${YELLOW}${ICON_WARNING} shellcheck not installed, skipping${NC}\n"
 fi
 echo ""
 
@@ -352,7 +352,7 @@ if command -v bats > /dev/null 2>&1 && [ -d "tests" ]; then
     report_slowest_test_files
     report_unit_result "$_unit_rc"
 else
-    printf "${YELLOW}${ICON_WARNING} bats not installed or no tests found, skipping${NC}\n"
+    printf '%b' "${YELLOW}${ICON_WARNING} bats not installed or no tests found, skipping${NC}\n"
 fi
 echo ""
 
@@ -362,21 +362,21 @@ if command -v go > /dev/null 2>&1; then
     if GOCACHE="$GO_TEST_CACHE" go build ./... > /dev/null 2>&1 &&
         GOCACHE="$GO_TEST_CACHE" go vet ./... > /dev/null 2>&1 &&
         GOCACHE="$GO_TEST_CACHE" go test ./... > /dev/null 2>&1; then
-        printf "${GREEN}${ICON_SUCCESS} Go tests passed${NC}\n"
+        printf '%b' "${GREEN}${ICON_SUCCESS} Go tests passed${NC}\n"
     else
-        printf "${RED}${ICON_ERROR} Go tests failed${NC}\n"
+        printf '%b' "${RED}${ICON_ERROR} Go tests failed${NC}\n"
         FAILED=$((FAILED + 1))
     fi
 else
-    printf "${YELLOW}${ICON_WARNING} Go not installed, skipping Go tests${NC}\n"
+    printf '%b' "${YELLOW}${ICON_WARNING} Go not installed, skipping Go tests${NC}\n"
 fi
 echo ""
 
 echo "4. Testing module loading..."
 if bash -c 'source lib/core/common.sh && echo "OK"' > /dev/null 2>&1; then
-    printf "${GREEN}${ICON_SUCCESS} Module loading passed${NC}\n"
+    printf '%b' "${GREEN}${ICON_SUCCESS} Module loading passed${NC}\n"
 else
-    printf "${RED}${ICON_ERROR} Module loading failed${NC}\n"
+    printf '%b' "${RED}${ICON_ERROR} Module loading failed${NC}\n"
     FAILED=$((FAILED + 1))
 fi
 echo ""
@@ -384,9 +384,9 @@ echo ""
 echo "5. Running integration tests..."
 # Quick syntax check for main scripts
 if bash -n mole && bash -n bin/clean.sh && bash -n bin/optimize.sh; then
-    printf "${GREEN}${ICON_SUCCESS} Integration tests passed${NC}\n"
+    printf '%b' "${GREEN}${ICON_SUCCESS} Integration tests passed${NC}\n"
 else
-    printf "${RED}${ICON_ERROR} Integration tests failed${NC}\n"
+    printf '%b' "${RED}${ICON_ERROR} Integration tests failed${NC}\n"
     FAILED=$((FAILED + 1))
 fi
 echo ""
@@ -394,13 +394,13 @@ echo ""
 echo "6. Testing installation..."
 # Installation script is macOS-specific; skip this test on non-macOS platforms
 if [[ "$(uname -s)" != "Darwin" ]]; then
-    printf "${YELLOW}${ICON_WARNING} Installation test skipped (non-macOS)${NC}\n"
+    printf '%b' "${YELLOW}${ICON_WARNING} Installation test skipped (non-macOS)${NC}\n"
 else
     # Skip if Homebrew mole is installed (install.sh will refuse to overwrite)
     install_test_home=""
     install_test_prefix=""
     if command -v brew > /dev/null 2>&1 && brew list mole &> /dev/null; then
-        printf "${GREEN}${ICON_SUCCESS} Installation test skipped, Homebrew${NC}\n"
+        printf '%b' "${GREEN}${ICON_SUCCESS} Installation test skipped, Homebrew${NC}\n"
     else
         install_test_home="$(mktemp -d "$PROJECT_ROOT/tests/tmp-install-home.XXXXXX" 2> /dev/null || true)"
         if [[ -z "$install_test_home" ]]; then
@@ -421,13 +421,13 @@ else
         MO_NO_OPLOG=1 \
         ./install.sh --prefix "$install_test_prefix" > /dev/null 2>&1; then
         if [[ -f "$install_test_prefix/mole" ]]; then
-            printf "${GREEN}${ICON_SUCCESS} Installation test passed${NC}\n"
+            printf '%b' "${GREEN}${ICON_SUCCESS} Installation test passed${NC}\n"
         else
-            printf "${RED}${ICON_ERROR} Installation test failed${NC}\n"
+            printf '%b' "${RED}${ICON_ERROR} Installation test failed${NC}\n"
             FAILED=$((FAILED + 1))
         fi
     else
-        printf "${RED}${ICON_ERROR} Installation test failed${NC}\n"
+        printf '%b' "${RED}${ICON_ERROR} Installation test failed${NC}\n"
         FAILED=$((FAILED + 1))
     fi
     if [[ -n "$install_test_prefix" ]]; then
@@ -441,8 +441,8 @@ echo ""
 
 echo "==============================="
 if [[ $FAILED -eq 0 ]]; then
-    printf "${GREEN}${ICON_SUCCESS} All tests passed!${NC}\n"
+    printf '%b' "${GREEN}${ICON_SUCCESS} All tests passed!${NC}\n"
     exit 0
 fi
-printf "${RED}${ICON_ERROR} $FAILED tests failed!${NC}\n"
+printf '%b' "${RED}${ICON_ERROR} $FAILED tests failed!${NC}\n"
 exit 1

@@ -514,7 +514,7 @@ paginated_multi_select() {
             fi
             printf "\r\033[2K${YELLOW}/ Search: %s%s${NC}  ${GRAY}%s${NC}\n" "$query_display" "$marker" "$counts" >&2
         elif [[ -n "${MOLE_READ_KEY_FORCE_CHAR:-}" ]]; then
-            printf "\r\033[2K${YELLOW}/ Search: _ ${NC}${GRAY}(type to search)${NC}\n" >&2
+            printf '%b' "\r\033[2K${YELLOW}/ Search: _ ${NC}${GRAY}(type to search)${NC}\n" >&2
         else
             printf "\r\033[2K${PURPLE_BOLD}%s${NC}  ${GRAY}%d/%d selected${NC}\n" "${title}" "$selected_count" "$total_items" >&2
         fi
@@ -559,7 +559,7 @@ paginated_multi_select() {
             [[ $cursor_pos -lt 0 ]] && cursor_pos=0
         fi
 
-        printf "${clear_line}\n" >&2
+        printf '%b' "${clear_line}\n" >&2
 
         # Items for current window
         local start_idx=$top_index
@@ -577,14 +577,14 @@ paginated_multi_select() {
         local items_shown=$((end_idx - start_idx + 1))
         [[ $items_shown -lt 0 ]] && items_shown=0
         if [[ $visible_total -eq 0 ]]; then
-            printf "${clear_line}No matches\n" >&2
+            printf '%b' "${clear_line}No matches\n" >&2
             items_shown=1
         fi
         for ((i = items_shown; i < items_per_page; i++)); do
-            printf "${clear_line}\n" >&2
+            printf '%b' "${clear_line}\n" >&2
         done
 
-        printf "${clear_line}\n" >&2
+        printf '%b' "${clear_line}\n" >&2
 
         # Build sort status
         local sort_label=""
@@ -641,12 +641,9 @@ paginated_multi_select() {
             [[ $term_width -ge 80 ]] && _segs_browse+=("$page_ctrl")
             _print_wrapped_controls "$sep" "${_segs_browse[@]}"
         fi
-        printf "${clear_line}" >&2
+        printf '%b' "${clear_line}" >&2
     }
 
-    # Track previous cursor position for incremental rendering
-    local prev_cursor_pos=$cursor_pos
-    local prev_top_index=$top_index
     local need_full_redraw=true
 
     # Main interaction loop
@@ -654,9 +651,6 @@ paginated_multi_select() {
         if [[ "$need_full_redraw" == "true" ]]; then
             draw_menu
             need_full_redraw=false
-            # Update tracking variables after full redraw
-            prev_cursor_pos=$cursor_pos
-            prev_top_index=$top_index
         fi
 
         local key
@@ -710,7 +704,6 @@ paginated_multi_select() {
 
                     printf "\033[%d;1H" "$((items_per_page + 4))" >&2
 
-                    prev_cursor_pos=$cursor_pos
                     continue
                 elif [[ $top_index -gt 0 ]]; then
                     ((top_index--))
@@ -734,8 +727,6 @@ paginated_multi_select() {
 
                     printf "\033[%d;1H" "$((items_per_page + 4))" >&2
 
-                    prev_cursor_pos=$cursor_pos
-                    prev_top_index=$top_index
                     continue
                 fi
                 ;;
@@ -768,7 +759,6 @@ paginated_multi_select() {
 
                             printf "\033[%d;1H" "$((items_per_page + 4))" >&2
 
-                            prev_cursor_pos=$cursor_pos
                             continue
                         elif [[ $((top_index + visible_count)) -lt ${#view_indices[@]} ]]; then
                             top_index=$((top_index + 1))
@@ -797,8 +787,6 @@ paginated_multi_select() {
 
                             printf "\033[%d;1H" "$((items_per_page + 4))" >&2
 
-                            prev_cursor_pos=$cursor_pos
-                            prev_top_index=$top_index
                             continue
                         fi
                     fi

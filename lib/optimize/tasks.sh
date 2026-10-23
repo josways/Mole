@@ -14,8 +14,6 @@ source "$_MOLE_OPTIMIZE_TASKS_DIR/catalog.sh"
 source "$_MOLE_OPTIMIZE_TASKS_DIR/outcomes.sh"
 
 # Config constants (override via env).
-readonly MOLE_TM_THIN_TIMEOUT=180
-readonly MOLE_TM_THIN_VALUE=9999999999
 readonly MOLE_SQLITE_MAX_SIZE=104857600 # 100MB
 
 # Dry-run aware output.

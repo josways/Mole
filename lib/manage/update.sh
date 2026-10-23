@@ -1186,7 +1186,6 @@ show_help() {
 update_mole() (
     local force_update="${1:-false}"
     local nightly_update="${2:-false}"
-    local update_interrupted=false
     local sudo_keepalive_pid=""
     local UPDATE_LOCK_CONTROL=""
     local UPDATE_LOCK_HOLDER_PID=""
@@ -1200,7 +1199,7 @@ update_mole() (
                 "$UPDATE_LOCK_CONTROL" "$UPDATE_LOCK_HOLDER_PID" "$UPDATE_LOCK_ACQUIRED"
         fi
     }
-    trap '_update_cleanup; update_interrupted=true; echo ""; exit 130' INT TERM
+    trap '_update_cleanup; echo ""; exit 130' INT TERM
     trap '_update_cleanup' EXIT
 
     if is_nix_install; then

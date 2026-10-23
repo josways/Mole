@@ -147,7 +147,6 @@ get_lsregister_path() {
 # ============================================================================
 readonly MOLE_TEMP_FILE_AGE_DAYS=7       # Temp file retention (days)
 readonly MOLE_ORPHAN_AGE_DAYS=30         # Orphaned data retention (days)
-readonly MOLE_DOTDIR_ORPHAN_AGE_DAYS=60  # Orphan dotfile hint threshold (days)
 readonly MOLE_MAX_PARALLEL_JOBS=15       # Parallel job limit
 readonly MOLE_MAIL_DOWNLOADS_MIN_KB=5120 # Mail attachment size threshold
 readonly MOLE_MAIL_AGE_DAYS=30           # Mail attachment retention (days)
@@ -158,7 +157,6 @@ readonly MOLE_GPU_CACHE_AGE_DAYS=1       # Rebuildable GPU cache retention (days
 readonly MOLE_TM_BACKUP_SAFE_HOURS=48    # TM backup safety window (hours)
 readonly MOLE_MAX_DS_STORE_FILES=500     # Max .DS_Store files to clean per scan
 readonly MOLE_MAX_ORPHAN_ITERATIONS=100  # Max iterations for orphaned app data scan
-readonly MOLE_ONE_GIB_KB=$((1024 * 1024))
 readonly MOLE_ONE_GB_BYTES=1000000000
 
 # ============================================================================
