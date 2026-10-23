@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Require an explicit safety justification on raw recursive deletion commands."""
+"""Require an explicit safety justification on raw deletion commands.
+
+Covered sinks: a recursive `rm` (with or without -f, since `rm -r` deletes a
+tree as surely as `rm -rf`), `find -delete`, `defaults delete`, and a sqlite3
+call whose statement deletes or rewrites rows (DELETE FROM, DROP, VACUUM).
+Each needs `# SAFE: <one-sentence reason>` on one of its physical lines.
+"""
 
 from __future__ import annotations
 
@@ -13,6 +19,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SAFE_MARKER = re.compile(r"\s#\s*SAFE:\s+\S")
 RM_COMMAND = re.compile(r"(?<![A-Za-z0-9_])(?:(?:/usr)?/bin/)?r\\?m(?=\s)")
 FIND_DELETE = re.compile(r"(?:^|\s)-delete(?=\s|[;&|)]|$)")
+DEFAULTS_DELETE = re.compile(r"(?<![A-Za-z0-9_-])defaults\s+(?:-currentHost\s+)?delete(?=\s|$)")
+SQLITE_COMMAND = re.compile(r"(?<![A-Za-z0-9_-])sqlite3(?=\s)")
+SQL_DESTRUCTIVE = re.compile(r"\b(?:DELETE\s+FROM|DROP\s+(?:TABLE|INDEX|VIEW)|VACUUM)\b", re.IGNORECASE)
 OUTPUT_ONLY_PREFIXES = ("echo ", "echo\t", "printf ", "printf\t", "log_")
 
 
@@ -70,9 +79,23 @@ def has_recursive_force_rm(command: str) -> bool:
             # rm option parsing remains active until an explicit `--`; an
             # option-looking token after another operand is still dangerous.
             continue
-        if "f" in flags and ("r" in flags or "R" in flags):
+        if "r" in flags or "R" in flags:
             return True
     return False
+
+
+def has_defaults_delete(command: str) -> bool:
+    return any(
+        not is_output_only_reference(command, match.start())
+        for match in DEFAULTS_DELETE.finditer(command)
+    )
+
+
+def has_destructive_sqlite(command: str) -> bool:
+    return bool(SQL_DESTRUCTIVE.search(command)) and any(
+        not is_output_only_reference(command, match.start())
+        for match in SQLITE_COMMAND.finditer(command)
+    )
 
 
 def has_find_delete(command: str) -> bool:
@@ -144,21 +167,29 @@ def inspect_file(path: Path) -> list[tuple[int, str]]:
             continue
         recursive_rm = has_recursive_force_rm(command)
         find_delete = has_find_delete(command)
-        if not recursive_rm and not find_delete:
+        defaults_delete = has_defaults_delete(command)
+        sqlite_delete = has_destructive_sqlite(command)
+        if not (recursive_rm or find_delete or defaults_delete or sqlite_delete):
             continue
         if recursive_rm:
             annotated = any(
                 RM_COMMAND.search(line) and SAFE_MARKER.search(line)
                 for line in physical_lines
             )
-        else:
+            kind = "raw recursive rm"
+        elif find_delete:
             annotated = any(
                 FIND_DELETE.search(line) and SAFE_MARKER.search(line)
                 for line in physical_lines
             )
+            kind = "raw find -delete"
+        else:
+            # A continued sqlite3 call cannot carry a comment before its
+            # backslash, so the marker may sit on any line of the command.
+            annotated = any(SAFE_MARKER.search(line) for line in physical_lines)
+            kind = "defaults delete" if defaults_delete else "sqlite3 DELETE/DROP/VACUUM"
         if annotated:
             continue
-        kind = "raw recursive rm" if recursive_rm else "raw find -delete"
         findings.append(
             (line_number, f"{kind} requires '# SAFE: <one-sentence reason>'")
         )

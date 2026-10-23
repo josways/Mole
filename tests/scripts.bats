@@ -142,6 +142,45 @@ EOF
     [[ "$output" == *"# SAFE:"* ]] || return 1
 }
 
+@test "destructive sink audit catches rm -r without -f, defaults delete and destructive sqlite" {
+    local audit="$PROJECT_ROOT/scripts/audit_destructive_sinks.py"
+    local safe_fixture="$HOME/destructive-wide-safe.sh"
+    local unsafe_fixture="$HOME/destructive-wide-unsafe.sh"
+    cat > "$safe_fixture" <<'EOF'
+rm -r "$scratch" # SAFE: exact test scratch directory
+defaults delete com.example.app Key # SAFE: exact key this test wrote
+sqlite3 "$db" \
+    "DELETE FROM t WHERE old = 1;" \
+    2> /dev/null # SAFE: exact rows this test inserted
+sqlite3 "$db" "SELECT COUNT(*) FROM t;"
+rm -f "$scratch_file"
+echo "defaults delete appears only in guidance"
+EOF
+    cat > "$unsafe_fixture" <<'EOF'
+rm -r "$target"
+rm -R "$target"
+defaults delete com.example.app Key
+defaults -currentHost delete com.example.app
+sqlite3 "$db" "DELETE FROM t;"
+sqlite3 "$db" "VACUUM;"
+sqlite3 "$db" \
+    "DROP TABLE t;"
+EOF
+
+    run python3 "$audit" "$safe_fixture"
+    [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+
+    run python3 "$audit" "$unsafe_fixture"
+    [ "$status" -eq 1 ] || { echo "$output"; return 1; }
+    [[ "$output" == *"$unsafe_fixture:1: raw recursive rm"* ]] || return 1
+    [[ "$output" == *"$unsafe_fixture:2: raw recursive rm"* ]] || return 1
+    [[ "$output" == *"$unsafe_fixture:3: defaults delete"* ]] || return 1
+    [[ "$output" == *"$unsafe_fixture:4: defaults delete"* ]] || return 1
+    [[ "$output" == *"$unsafe_fixture:5: sqlite3"* ]] || return 1
+    [[ "$output" == *"$unsafe_fixture:6: sqlite3"* ]] || return 1
+    [[ "$output" == *"$unsafe_fixture:7: sqlite3"* ]]
+}
+
 @test "CI and local checks share the destructive sink audit" {
     run grep -F 'audit_destructive_sinks.py' "$PROJECT_ROOT/scripts/check.sh"
     [ "$status" -eq 0 ]

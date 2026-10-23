@@ -485,7 +485,7 @@ opt_quarantine_cleanup() {
 
     if [[ "${MOLE_DRY_RUN:-0}" != "1" ]]; then
         local exit_code=0
-        run_with_timeout "$MOLE_TIMEOUT_PKG_LIST_SEC" sqlite3 "$quarantine_db" "DELETE FROM LSQuarantineEvent; VACUUM;" 2> /dev/null || exit_code=$?
+        run_with_timeout "$MOLE_TIMEOUT_PKG_LIST_SEC" sqlite3 "$quarantine_db" "DELETE FROM LSQuarantineEvent; VACUUM;" 2> /dev/null || exit_code=$? # SAFE: Gatekeeper download-history rows only; the database stays and macOS refills it.
 
         if [[ $exit_code -eq 0 ]]; then
             opt_msg "Quarantine history cleared ($row_count entries)"
@@ -623,7 +623,7 @@ opt_sqlite_vacuum() {
 
             local exit_code=0
             if [[ "${MOLE_DRY_RUN:-0}" != "1" ]]; then
-                run_with_timeout "$MOLE_TIMEOUT_PKG_CLEANUP_SEC" sqlite3 "$db_file" "VACUUM;" 2> /dev/null || exit_code=$?
+                run_with_timeout "$MOLE_TIMEOUT_PKG_CLEANUP_SEC" sqlite3 "$db_file" "VACUUM;" 2> /dev/null || exit_code=$? # SAFE: VACUUM rewrites an integrity-checked database in place and deletes no rows.
 
                 if [[ $exit_code -eq 0 ]]; then
                     vacuumed=$((vacuumed + 1))
@@ -1047,7 +1047,7 @@ opt_prune_spotlight_orphan_rules() {
     if [[ ${#keep[@]} -gt 0 ]]; then
         defaults write "$domain" EnabledPreferenceRules -array "${keep[@]}" 2> /dev/null || write_status=$?
     else
-        defaults delete "$domain" EnabledPreferenceRules 2> /dev/null || write_status=$?
+        defaults delete "$domain" EnabledPreferenceRules 2> /dev/null || write_status=$? # SAFE: every rule in this list was found orphaned, so the emptied key is what remains.
     fi
 
     if [[ $write_status -eq 0 ]]; then
@@ -1167,7 +1167,7 @@ opt_legacy_overrides_audit() {
             changed=$((changed + 1))
             continue
         fi
-        if defaults delete "${found_domains[$idx]}" "${found_keys[$idx]}" 2> /dev/null; then
+        if defaults delete "${found_domains[$idx]}" "${found_keys[$idx]}" 2> /dev/null; then # SAFE: removes only an override key this scan just read as enabled.
             opt_msg "Removed override: ${found_labels[$idx]}"
             changed=$((changed + 1))
         else
@@ -1444,7 +1444,7 @@ opt_notification_cleanup() {
             local sql_ok=0
             sqlite3 "$nc_db" \
                 "DELETE FROM record WHERE delivered_date < strftime('%s','now','-30 days'); VACUUM;" \
-                2> /dev/null || sql_ok=$?
+                2> /dev/null || sql_ok=$? # SAFE: prunes notification records older than 30 days; the database stays.
             if [[ $sql_ok -eq 0 ]]; then
                 killall NotificationCenter 2> /dev/null || true
                 opt_msg "Notification Center database cleaned (was $(bytes_to_human $((db_size * 1024))))"
@@ -1561,7 +1561,7 @@ opt_coreduet_cleanup() {
         local sql_failed=0
         if sqlite3 "$knowledge_db" \
             "DELETE FROM ZOBJECT WHERE ZCREATIONDATE < (strftime('%s','now','-90 days') - strftime('%s','2001-01-01')); VACUUM;" \
-            2> /dev/null; then
+            2> /dev/null; then # SAFE: prunes CoreDuet records older than 90 days through SQLite, which recovers its own WAL.
             sql_applied=1
         else
             sql_failed=1
