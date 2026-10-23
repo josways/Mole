@@ -14,6 +14,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Correctness checks cannot tell intent, so a pull request built to pass
+  # them can still change the release path or an agent instruction. This job
+  # never fails; it annotates the changed paths a human should read closely.
+  review-notice:
+    name: Review Notice
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The merge commit and its first parent, the base branch tip.
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Annotate changes that need a closer review
+        run: python3 scripts/review_notice.py HEAD^1 HEAD
+
   format:
     name: Format
     runs-on: macos-latest

@@ -558,3 +558,36 @@ EOF
     run grep -F 'git fetch --no-tags --depth=1 origin windows' "$PROJECT_ROOT/.github/workflows/check.yml"
     [ "$status" -eq 0 ]
 }
+
+@test "review notice names sensitive paths, binaries and new executables without failing" {
+    local repo="$HOME/review-notice-repo"
+    mkdir -p "$repo/lib/clean" "$repo/.github/workflows"
+    git -C "$repo" init -q
+    git -C "$repo" config user.email test@example.com
+    git -C "$repo" config user.name test
+    printf 'a\n' > "$repo/lib/clean/user.sh"
+    printf 'on: push\n' > "$repo/.github/workflows/ci.yml"
+    git -C "$repo" add -A
+    git -C "$repo" commit -q -m base
+
+    printf 'b\n' >> "$repo/lib/clean/user.sh"
+    printf 'jobs: {}\n' >> "$repo/.github/workflows/ci.yml"
+    printf '\000\001' > "$repo/payload.bin"
+    printf '#!/bin/sh\n' > "$repo/helper.sh"
+    chmod +x "$repo/helper.sh"
+    git -C "$repo" add -A
+    git -C "$repo" commit -q -m change
+
+    run /bin/bash -c "cd '$repo' && python3 '$PROJECT_ROOT/scripts/review_notice.py' HEAD~1"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *".github/workflows/ci.yml (workflow"* ]] || return 1
+    [[ "$output" == *"payload.bin (binary file)"* ]] || return 1
+    [[ "$output" == *"helper.sh (new executable)"* ]] || return 1
+    [[ "$output" != *"lib/clean/user.sh"* ]] || return 1
+    [[ "$output" == *"review-notice: 3 item(s)"* ]]
+}
+
+@test "check workflow runs the review notice on pull requests" {
+    run grep -F 'scripts/review_notice.py' "$PROJECT_ROOT/.github/workflows/check.yml"
+    [ "$status" -eq 0 ]
+}
