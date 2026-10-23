@@ -25,6 +25,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Verify release tag matches source version
         env:
@@ -71,6 +73,12 @@ jobs:
     name: Publish Release
     needs: build
     runs-on: ubuntu-latest
+    # The release environment is where publishing authority lives: restrict
+    # its deployment refs to V* tags (and optionally require a reviewer) in
+    # Settings > Environments, and keep HOMEBREW_GITHUB_API_TOKEN as its
+    # secret rather than a repository secret, which any workflow on any pushed
+    # branch can read.
+    environment: release
     timeout-minutes: 20
     permissions:
       contents: write
@@ -205,6 +213,7 @@ jobs:
   update-homebrew-core:
     name: Update Homebrew Core
     runs-on: ubuntu-latest
+    environment: release
     timeout-minutes: 15
     needs: release
     # A prerelease must never move the stable Homebrew formula; only the
@@ -213,6 +222,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Extract version from tag
         id: tag_version

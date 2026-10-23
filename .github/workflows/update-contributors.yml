@@ -20,6 +20,10 @@ jobs:
       contents: write
       pull-requests: write
     steps:
+      # The only checkout that keeps its credentials: git-auto-commit-action
+      # pushes CONTRIBUTORS.svg with them. Every other checkout sets
+      # persist-credentials: false so later steps cannot read the token from
+      # .git/config.
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
