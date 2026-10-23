@@ -174,37 +174,112 @@ EOF
     [ "$output" = "0B" ]
 }
 
-@test "get_file_size makes exactly one stat fork per call" {
-    # A timing ratio against a bare stat flaked on busy CI runners (bash call
-    # overhead alone moved it past the limit), so check the cost structurally:
-    # get_file_size runs on every sized item, and each command substitution,
-    # pipe or process substitution in its body is one more fork per call.
-    local body
-    body=$(/bin/bash --noprofile --norc -c '
-        source "$1/lib/core/base.sh"
-        declare -f get_file_size
-    ' _ "$PROJECT_ROOT")
-    [[ -n "$body" ]] || return 1
+# This is a deliberately small execution contract for get_file_size, not a
+# shell parser or an OS fork counter. Inspect expanded commands so quoting the
+# stat path and literal shell syntax in comments cannot fool the check.
+assert_get_file_size_trace() {
+    local trace_file="$1" line depth command stat_calls=0
+    local trace_pattern='^\++([0-9]+) (.*)$'
+    while IFS= read -r line; do
+        [[ "$line" =~ $trace_pattern ]] || { printf 'unexpected trace: %s\n' "$line"; return 1; }
+        depth="${BASH_REMATCH[1]}"
+        command="${BASH_REMATCH[2]}"
+        if [[ "$depth" == 1 && "$command" == "$STAT_BSD -f%z "* ]]; then
+            stat_calls=$((stat_calls + 1))
+            continue
+        fi
+        [[ "$depth" == 0 ]] || { printf 'extra child-shell work: %s\n' "$line"; return 1; }
+        # Bash 3.2 need not wait for an unused process substitution. Its
+        # expanded descriptor is visible in the parent trace before return.
+        # Both checked inputs are regular temporary paths, never /dev/fd paths.
+        [[ "$command" != *'/dev/fd/'* ]] || { printf 'process substitution: %s\n' "$line"; return 1; }
+        case "$command" in
+            get_file_size\ * | local\ * | echo\ * | printf\ * | wait | 'set +x') ;;
+            *)
+                [[ "$command" =~ ^[a-zA-Z_][a-zA-Z0-9_]*= ]] || {
+                    printf 'unexpected command: %s\n' "$line"
+                    return 1
+                }
+                ;;
+        esac
+    done < "$trace_file"
+    [[ "$stat_calls" -eq 1 ]] || { printf 'stat probes: %s\n' "$stat_calls"; return 1; }
+}
 
-    # $(( )) is arithmetic, not a fork.
-    local count=0 rest="${body//\$((/}"
-    # shellcheck disable=SC2016  # Literal shell source text, not an expansion.
-    while [[ "$rest" == *'$('* ]]; do
-        count=$((count + 1))
-        rest="${rest#*\$(}"
-    done
-    [[ "$count" -eq 1 ]] || { echo "command substitutions: $count"; echo "$body"; return 1; }
-    # shellcheck disable=SC2016  # Literal shell source text, not an expansion.
-    [[ "$body" == *'$($STAT_BSD -f%z '* ]] || { echo "$body"; return 1; }
-    [[ "$body" != *'`'* ]] || { echo "$body"; return 1; }
-    [[ "$body" != *'<('* && "$body" != *'>('* ]] || { echo "$body"; return 1; }
-    local without_or="${body//||/}"
-    [[ "$without_or" != *'|'* ]] || { echo "pipe in body:"; echo "$body"; return 1; }
-
+@test "get_file_size uses one stat probe without extra child-shell work" {
+    # A timing ratio against bare stat flaked on busy runners. Bash 3.2 xtrace
+    # exposes expanded commands and BASH_SUBSHELL without timing thresholds or
+    # another parser dependency. Run outside Bats' own DEBUG instrumentation.
     local test_file="$TEST_DATA_DIR/size_test.txt"
+    local trace_file="$BATS_TEST_TMPDIR/size.trace" file expected
     dd if=/dev/zero of="$test_file" bs=1024 count=100 2> /dev/null
-    [ "$(get_file_size "$test_file")" = "102400" ] || return 1
-    [ "$(get_file_size "$TEST_DATA_DIR/missing")" = "0" ]
+    for file in "$test_file" "$TEST_DATA_DIR/missing"; do
+        expected=0
+        [[ "$file" != "$test_file" ]] || expected=102400
+        run /bin/bash --noprofile --norc -s "$PROJECT_ROOT" "$file" "$trace_file" <<'EOF'
+source "$1/lib/core/base.sh"
+PS4='+${BASH_SUBSHELL} '
+{
+    set -x
+    get_file_size "$2" || exit 1
+    wait
+    set +x
+} 2> "$3"
+EOF
+        [ "$status" -eq 0 ]
+        [ "$output" = "$expected" ]
+        assert_get_file_size_trace "$trace_file"
+    done
+}
+
+@test "get_file_size execution guard rejects extra work and accepts harmless syntax" {
+    local variant expected extra body trace_file="$BATS_TEST_TMPDIR/fixture.trace"
+    local test_file="$BATS_TEST_TMPDIR/fixture.txt"
+    printf 'fixture' > "$test_file"
+    for variant in baseline external subshell substitution pipeline process backtick arithmetic comment quoted_stat; do
+        expected=1
+        # shellcheck disable=SC2016  # These strings are source for a plain fixture shell.
+        case "$variant" in
+            baseline) extra=''; expected=0 ;;
+            external) extra='/usr/bin/true' ;;
+            subshell) extra='( : )' ;;
+            substitution) extra='extra=$(printf x)' ;;
+            pipeline) extra='printf x | /bin/cat > /dev/null' ;;
+            process) extra='extra=<(printf x)' ;;
+            backtick) extra='extra=`printf x`' ;;
+            arithmetic) extra='extra=$((1 + 2))'; expected=0 ;;
+            comment) extra='# $(unused) | `unused` <(unused)'; expected=0 ;;
+            quoted_stat) extra=''; expected=0 ;;
+        esac
+        # shellcheck disable=SC2016  # Source for the fixture shell; expanded there.
+        body='get_file_size() {
+    local file="$1" result extra
+    EXTRA
+    result=$($STAT_BSD -f%z "$file" 2> /dev/null)
+    echo "${result:-0}"
+}'
+        body="${body/EXTRA/$extra}"
+        if [[ "$variant" == quoted_stat ]]; then
+            # shellcheck disable=SC2016  # Exercise a quoted command path.
+            body="${body/\$STAT_BSD/\"\$STAT_BSD\"}"
+        fi
+        run /bin/bash --noprofile --norc -s "$body" "$test_file" "$trace_file" "$STAT_BSD" <<'EOF'
+eval "$1"
+STAT_BSD="$4"
+PS4='+${BASH_SUBSHELL} '
+{
+    set -x
+    get_file_size "$2" || exit 1
+    wait
+    set +x
+} 2> "$3"
+EOF
+        [ "$status" -eq 0 ]
+        [ "$output" = 7 ]
+        local actual=0
+        assert_get_file_size_trace "$trace_file" || actual=$?
+        [[ "$actual" -eq "$expected" ]] || { printf 'wrong guard result for %s\n' "$variant"; return 1; }
+    done
 }
 
 @test "get_file_mtime returns valid timestamp" {
