@@ -178,9 +178,9 @@ EOF
     local test_file="$TEST_DATA_DIR/size_test.txt"
     dd if=/dev/zero of="$test_file" bs=1024 count=100 2> /dev/null
 
-    # get_file_size is compared with the one stat probe it performs, so a
-    # regression that adds one fork per call raises the ratio while machine
-    # speed cancels out. Five interleaved rounds of 100 calls each, keeping the
+    # get_file_size is compared with a reference of the same shape that makes
+    # its one stat probe, so a regression that adds one fork per call raises
+    # the ratio while machine speed cancels out. Five interleaved rounds of 100 calls each, keeping the
     # fastest round per side: one 500-call pass per side let a noisy CI runner
     # slow only the first pass (2961ms vs 2169ms on a PR that never touched
     # get_file_size). Measured here: ~150ms per round on both sides; one extra
@@ -201,11 +201,19 @@ EOF
                 end=$(date +%s%N)
                 echo $(((end - start) / 1000000))
             }
+            # The same shape as get_file_size with its one stat fork, so the
+            # function call and the /dev/null redirect cost the same on both
+            # sides; a bare $(stat) reference ran ~40% faster on CI runners.
+            ref_size() {
+                local result
+                result=$($STAT_BSD -f%z "$1" 2> /dev/null)
+                echo "${result:-0}"
+            }
             time_ref() {
-                local start end i value
+                local start end i
                 start=$(date +%s%N)
                 for i in {1..100}; do
-                    value=$($STAT_BSD -f%z "$file" 2> /dev/null)
+                    ref_size "$file" > /dev/null
                 done
                 end=$(date +%s%N)
                 echo $(((end - start) / 1000000))
