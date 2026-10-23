@@ -247,6 +247,16 @@ fi
 printf '%s\n' "$timeout_status_output"
 echo -e "${GREEN}${ICON_SUCCESS} Timeout status check passed${NC}\n"
 
+# Tests judge whether code works, not whether a line runs data as code, talks
+# to the network or reaches for root; this gate makes each of those explicit.
+if ! shell_intent_output=$(python3 "$SCRIPT_DIR/audit_shell_intent.py" 2>&1); then
+    printf '%s\n' "$shell_intent_output"
+    echo -e "${RED}${ICON_ERROR} Unreviewed eval, network or privileged call found${NC}\n"
+    exit 1
+fi
+printf '%s\n' "$shell_intent_output"
+echo -e "${GREEN}${ICON_SUCCESS} Shell intent check passed${NC}\n"
+
 # The published agent skill names commands and flags for both CLIs; a stale one
 # sends other people's agents into rejected commands. CI fetches the windows
 # branch and sets MOLE_SKILL_AUDIT_REQUIRE_WINDOWS so that side cannot be skipped.

