@@ -178,11 +178,13 @@ EOF
     local test_file="$TEST_DATA_DIR/size_test.txt"
     dd if=/dev/zero of="$test_file" bs=1024 count=100 2> /dev/null
 
-    # 500 calls, compared with the same count of the one stat probe that
-    # get_file_size performs. A regression that adds one fork per call raises
-    # the measured cost far above this ratio; absolute milliseconds would be a
-    # machine-speed lottery. Measured here: get_file_size ~1.2s, stat reference
-    # ~1.18s (ratio ~1.02); one extra fork per call adds ~0.5s.
+    # get_file_size is compared with the one stat probe it performs, so a
+    # regression that adds one fork per call raises the ratio while machine
+    # speed cancels out. Five interleaved rounds of 100 calls each, keeping the
+    # fastest round per side: one 500-call pass per side let a noisy CI runner
+    # slow only the first pass (2961ms vs 2169ms on a PR that never touched
+    # get_file_size). Measured here: ~150ms per round on both sides; one extra
+    # external command per call takes get_file_size to ~290ms.
     local ratio_percent="${MOLE_PERF_GET_FILE_SIZE_RATIO_PERCENT:-125}"
     local get_ms ref_ms
     read -r get_ms ref_ms <<< "$(
@@ -190,23 +192,41 @@ EOF
             source "$1/lib/core/base.sh"
             file="$2"
             get_file_size "$file" > /dev/null
-            start=$(date +%s%N)
-            for i in {1..500}; do
-                get_file_size "$file" > /dev/null
+            time_get() {
+                local start end i
+                start=$(date +%s%N)
+                for i in {1..100}; do
+                    get_file_size "$file" > /dev/null
+                done
+                end=$(date +%s%N)
+                echo $(((end - start) / 1000000))
+            }
+            time_ref() {
+                local start end i value
+                start=$(date +%s%N)
+                for i in {1..100}; do
+                    value=$($STAT_BSD -f%z "$file" 2> /dev/null)
+                done
+                end=$(date +%s%N)
+                echo $(((end - start) / 1000000))
+            }
+            best_get="" best_ref=""
+            for round in 1 2 3 4 5; do
+                if ((round % 2)); then
+                    g=$(time_get)
+                    r=$(time_ref)
+                else
+                    r=$(time_ref)
+                    g=$(time_get)
+                fi
+                [[ -z "$best_get" || "$g" -lt "$best_get" ]] && best_get="$g"
+                [[ -z "$best_ref" || "$r" -lt "$best_ref" ]] && best_ref="$r"
             done
-            end=$(date +%s%N)
-            get_ms=$(( (end - start) / 1000000 ))
-            start=$(date +%s%N)
-            for i in {1..500}; do
-                value=$($STAT_BSD -f%z "$file" 2> /dev/null)
-            done
-            end=$(date +%s%N)
-            ref_ms=$(( (end - start) / 1000000 ))
-            printf "%s %s\n" "$get_ms" "$ref_ms"
+            printf "%s %s\n" "$best_get" "$best_ref"
         ' _ "$PROJECT_ROOT" "$test_file"
     )"
 
-    local limit_ms=$(( ref_ms * ratio_percent / 100 + 150 ))
+    local limit_ms=$((ref_ms * ratio_percent / 100 + 30))
     if [[ "$get_ms" -ge "$limit_ms" ]]; then
         printf 'get_file_size %sms vs stat reference %sms (limit %sms)\n' \
             "$get_ms" "$ref_ms" "$limit_ms" >&2
