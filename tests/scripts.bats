@@ -578,7 +578,8 @@ EOF
     git -C "$repo" add -A
     git -C "$repo" commit -q -m change
 
-    run /bin/bash -c "cd '$repo' && python3 '$PROJECT_ROOT/scripts/review_notice.py' HEAD~1"
+    # GITHUB_ACTIONS switches the output to annotations; pin the plain form.
+    run env GITHUB_ACTIONS=false /bin/bash -c "cd '$repo' && python3 '$PROJECT_ROOT/scripts/review_notice.py' HEAD~1"
     [ "$status" -eq 0 ]
     [[ "$output" == *".github/workflows/ci.yml (workflow"* ]] || return 1
     [[ "$output" == *"payload.bin (binary file)"* ]] || return 1
