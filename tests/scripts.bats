@@ -153,7 +153,7 @@ sqlite3 "$db" \
     "DELETE FROM t WHERE old = 1;" \
     2> /dev/null # SAFE: exact rows this test inserted
 sqlite3 "$db" "SELECT COUNT(*) FROM t;"
-rm -f "$scratch_file"
+rm -f "$scratch_file" # SAFE: this test's own mktemp file
 echo "defaults delete appears only in guidance"
 EOF
     cat > "$unsafe_fixture" <<'EOF'
@@ -179,6 +179,40 @@ EOF
     [[ "$output" == *"$unsafe_fixture:5: sqlite3"* ]] || return 1
     [[ "$output" == *"$unsafe_fixture:6: sqlite3"* ]] || return 1
     [[ "$output" == *"$unsafe_fixture:7: sqlite3"* ]]
+}
+
+@test "destructive sink audit requires SAFE on single-file rm but not on rm as an argument" {
+    local audit="$PROJECT_ROOT/scripts/audit_destructive_sinks.py"
+    local safe_fixture="$HOME/destructive-rm-safe.sh"
+    local unsafe_fixture="$HOME/destructive-rm-unsafe.sh"
+    cat > "$safe_fixture" <<'EOF'
+rm -f "$scratch" # SAFE: this test's own mktemp file
+bun pm cache rm > /dev/null 2>&1
+if declare -F rm > /dev/null 2>&1; then :; fi
+rm -f "$scratch" "${scratch}.a" \
+    "${scratch}.b" 2> /dev/null || true # SAFE: this test's own mktemp sidecars
+echo "rm -f appears only in guidance"
+EOF
+    cat > "$unsafe_fixture" <<'EOF'
+rm -f "$target"
+rm "$target"
+sudo -n rm "$target"
+[[ -f "$target" ]] && rm -f "$target"
+elif ! rm -f "$target"; then :; fi
+find "$dir" -type f -exec rm -f {} +
+EOF
+
+    run python3 "$audit" "$safe_fixture"
+    [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+
+    run python3 "$audit" "$unsafe_fixture"
+    [ "$status" -eq 1 ] || { echo "$output"; return 1; }
+    [[ "$output" == *"$unsafe_fixture:1: raw rm"* ]] || return 1
+    [[ "$output" == *"$unsafe_fixture:2: raw rm"* ]] || return 1
+    [[ "$output" == *"$unsafe_fixture:3: raw rm"* ]] || return 1
+    [[ "$output" == *"$unsafe_fixture:4: raw rm"* ]] || return 1
+    [[ "$output" == *"$unsafe_fixture:5: raw rm"* ]] || return 1
+    [[ "$output" == *"$unsafe_fixture:6: raw rm"* ]]
 }
 
 @test "CI and local checks share the destructive sink audit" {

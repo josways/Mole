@@ -400,7 +400,7 @@ paginated_multi_select() {
                 sorted_indices_cache+=("$_id")
             done < <(LC_ALL=C sort -t $'\t' $sort_key -k2,2n -- "$tmpfile" 2> /dev/null)
 
-            rm -f "$tmpfile"
+            rm -f "$tmpfile" # SAFE: this function's own mktemp scratch file.
         else
             sorted_indices_cache=("${orig_indices[@]}")
         fi

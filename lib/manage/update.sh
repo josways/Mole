@@ -31,7 +31,7 @@ curl_download_with_retry() {
             curl_exit=$?
         fi
 
-        rm -f "$output_file" 2> /dev/null || true
+        rm -f "$output_file" 2> /dev/null || true # SAFE: the partial download this function was writing.
         case "$curl_exit" in
             6 | 7 | 18 | 28 | 35 | 52 | 55 | 56) ;;
             *) return "$curl_exit" ;;
@@ -1349,7 +1349,7 @@ update_mole() (
         download_error=$(curl_download_with_retry "$installer_url" "$tmp_installer" 2>&1) || {
             local curl_exit=$?
             if [[ -t 1 ]]; then stop_inline_spinner; fi
-            rm -f "$tmp_installer"
+            rm -f "$tmp_installer" # SAFE: update_mole's own mktemp_file installer download.
             log_error "Update failed, curl error: $curl_exit"
 
             case $curl_exit in
@@ -1366,7 +1366,7 @@ update_mole() (
     elif command -v wget > /dev/null 2>&1; then
         download_error=$(wget --timeout=10 --tries=3 -qO "$tmp_installer" "$installer_url" 2>&1) || {
             if [[ -t 1 ]]; then stop_inline_spinner; fi
-            rm -f "$tmp_installer"
+            rm -f "$tmp_installer" # SAFE: update_mole's own mktemp_file installer download.
             log_error "Update failed, wget error"
             echo -e "${ICON_REVIEW} Check network connection and try again."
             echo -e "${ICON_REVIEW} URL: $installer_url"
@@ -1374,7 +1374,7 @@ update_mole() (
         }
     else
         if [[ -t 1 ]]; then stop_inline_spinner; fi
-        rm -f "$tmp_installer"
+        rm -f "$tmp_installer" # SAFE: update_mole's own mktemp_file installer download.
         log_error "curl or wget required"
         echo -e "${ICON_REVIEW} Install curl with: ${GRAY}brew install curl${NC}"
         exit 1
@@ -1391,7 +1391,7 @@ update_mole() (
     if [[ "$requires_sudo" == "true" ]]; then
         if ! request_sudo_access "Mole update requires admin access"; then
             log_error "Update aborted, admin access denied"
-            rm -f "$tmp_installer"
+            rm -f "$tmp_installer" # SAFE: update_mole's own mktemp_file installer download.
             exit 1
         fi
         # Start sudo keepalive to prevent cache expiration during install
@@ -1406,7 +1406,7 @@ update_mole() (
         # failing halfway through a privileged install.
         if ! _update_sudo_reaches_subprocess; then
             _update_cleanup
-            rm -f "$tmp_installer"
+            rm -f "$tmp_installer" # SAFE: update_mole's own mktemp_file installer download.
             log_error "Admin access cannot be handed to the installer in this environment"
             echo -e "${ICON_REVIEW} Run ${GRAY}mo update${NC} from a terminal, or cache credentials first: ${GRAY}sudo -v && mo update${NC}"
             exit 1
@@ -1501,7 +1501,7 @@ update_mole() (
         else
             if [[ -t 1 ]]; then stop_inline_spinner; fi
             if ! _update_self_heal_reinstall "$installer_assume_sudo_auth" "main" "$install_dir" "$config_dir" "$mole_path" "$final_success_label" "$latest_commit"; then
-                rm -f "$tmp_installer"
+                rm -f "$tmp_installer" # SAFE: update_mole's own mktemp_file installer download.
                 _update_cleanup
                 log_error "Nightly update failed"
                 _print_failed_installer_output
@@ -1515,7 +1515,7 @@ update_mole() (
         else
             if [[ -t 1 ]]; then stop_inline_spinner; fi
             if ! _update_self_heal_reinstall "$installer_assume_sudo_auth" "$update_tag" "$install_dir" "$config_dir" "$mole_path" "$final_success_label"; then
-                rm -f "$tmp_installer"
+                rm -f "$tmp_installer" # SAFE: update_mole's own mktemp_file installer download.
                 _update_cleanup
                 log_error "Update failed"
                 _print_failed_installer_output
@@ -1532,7 +1532,7 @@ update_mole() (
             else
                 if [[ -t 1 ]]; then stop_inline_spinner; fi
                 if ! _update_self_heal_reinstall "$installer_assume_sudo_auth" "$update_tag" "$install_dir" "$config_dir" "$mole_path" "$final_success_label"; then
-                    rm -f "$tmp_installer"
+                    rm -f "$tmp_installer" # SAFE: update_mole's own mktemp_file installer download.
                     _update_cleanup
                     log_error "Update failed"
                     _print_failed_installer_output
@@ -1543,8 +1543,8 @@ update_mole() (
         fi
     fi
 
-    rm -f "$tmp_installer"
-    rm -f "$HOME/.cache/mole/update_message"
+    rm -f "$tmp_installer"                   # SAFE: update_mole's own mktemp_file installer download.
+    rm -f "$HOME/.cache/mole/update_message" # SAFE: Mole's own update-check cache files under ~/.cache/mole.
 
     # Cleanup and reset trap
     _update_cleanup

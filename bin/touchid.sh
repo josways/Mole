@@ -31,7 +31,7 @@ readonly PAM_TID_LINE="auth       sufficient     pam_tid.so"
 
 secure_install_pam() {
     local src="$1" dst="$2"
-    sudo install -m 444 -o root -g wheel "$src" "$dst" && rm -f "$src"
+    sudo install -m 444 -o root -g wheel "$src" "$dst" && rm -f "$src" # SAFE: the temp copy secure_install_pam just installed into /etc/pam.d.
 }
 
 # Check if Touch ID is already configured

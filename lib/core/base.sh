@@ -1217,7 +1217,7 @@ probe_temp_root() {
     [[ -d "$path" ]] || return 1
 
     probe=$(mktemp "$path/mole.probe.XXXXXX" 2> /dev/null) || return 1
-    rm -f "$probe" 2> /dev/null || true
+    rm -f "$probe" 2> /dev/null || true # SAFE: this function's own mktemp scratch file.
 
     printf '%s\n' "$path"
 }
@@ -1422,7 +1422,7 @@ cleanup_temp_files() {
     local file
     if [[ ${#MOLE_TEMP_FILES[@]} -gt 0 ]]; then
         for file in "${MOLE_TEMP_FILES[@]}"; do
-            [[ -f "$file" ]] && rm -f "$file" 2> /dev/null || true
+            [[ -f "$file" ]] && rm -f "$file" 2> /dev/null || true # SAFE: temp files this process registered through create_temp_file.
         done
     fi
 
@@ -1445,10 +1445,10 @@ cleanup_temp_files() {
             if [[ -d "$registered_path" && ! -L "$registered_path" ]]; then
                 rm -rf "$registered_path" 2> /dev/null || true # SAFE: mktemp dir registered under resolved Mole temp root
             else
-                rm -f "$registered_path" 2> /dev/null || true
+                rm -f "$registered_path" 2> /dev/null || true # SAFE: a temp file registered under the resolved Mole temp root, checked above.
             fi
         done < "$MOLE_TEMP_REGISTRY_FILE"
-        rm -f "$MOLE_TEMP_REGISTRY_FILE" 2> /dev/null || true
+        rm -f "$MOLE_TEMP_REGISTRY_FILE" 2> /dev/null || true # SAFE: this process's own temp registry file.
     fi
 
     MOLE_TEMP_FILES=()

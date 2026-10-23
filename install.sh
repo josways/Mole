@@ -96,7 +96,7 @@ curl_download_with_retry() {
             curl_exit=$?
         fi
 
-        rm -f "$output_file" 2> /dev/null || true
+        rm -f "$output_file" 2> /dev/null || true # SAFE: the partial download this function was writing.
         case "$curl_exit" in
             6 | 7 | 18 | 28 | 35 | 52 | 55 | 56) ;;
             *)
@@ -148,10 +148,10 @@ safe_rm() {
     esac
 
     if [[ -d "$target" ]]; then
-        find "$target" -depth \( -type f -o -type l \) -exec rm -f {} + 2> /dev/null || true
+        find "$target" -depth \( -type f -o -type l \) -exec rm -f {} + 2> /dev/null || true # SAFE: safe_rm reaches here only for paths under the installer temp root, checked above.
         find "$target" -depth -type d -exec rmdir {} + 2> /dev/null || true
     else
-        rm -f "$target" 2> /dev/null || true
+        rm -f "$target" 2> /dev/null || true # SAFE: safe_rm reaches here only for paths under the installer temp root, checked above.
     fi
 }
 
@@ -1092,12 +1092,12 @@ write_install_channel_metadata() {
             printf 'INSTALL_RECEIPT=%s\n' "$install_receipt"
         fi
     } > "$tmp_file" || {
-        rm -f "$tmp_file" 2> /dev/null || true
+        rm -f "$tmp_file" 2> /dev/null || true # SAFE: this function's own mktemp scratch file.
         return 1
     }
 
     mv -f "$tmp_file" "$metadata_file" || {
-        rm -f "$tmp_file" 2> /dev/null || true
+        rm -f "$tmp_file" 2> /dev/null || true # SAFE: this function's own mktemp scratch file.
         return 1
     }
 }
@@ -1350,7 +1350,7 @@ download_binary() {
     if [[ -f "$SOURCE_DIR/bin/${binary_name}-go" ]]; then
         if ! cp "$SOURCE_DIR/bin/${binary_name}-go" "$staged_path" ||
             ! install_staged_binary "$staged_path" "$target_path"; then
-            rm -f "$staged_path"
+            rm -f "$staged_path" # SAFE: this function's own mktemp scratch file.
             return 1
         fi
         log_success "Installed local ${binary_name} binary"
@@ -1358,7 +1358,7 @@ download_binary() {
     elif [[ -f "$SOURCE_DIR/bin/${binary_name}-darwin-${arch_suffix}" ]]; then
         if ! cp "$SOURCE_DIR/bin/${binary_name}-darwin-${arch_suffix}" "$staged_path" ||
             ! install_staged_binary "$staged_path" "$target_path"; then
-            rm -f "$staged_path"
+            rm -f "$staged_path" # SAFE: this function's own mktemp scratch file.
             return 1
         fi
         log_success "Installed local ${binary_name} binary"
@@ -1370,7 +1370,7 @@ download_binary() {
             install_staged_binary "$staged_path" "$target_path"; then
             return 0
         fi
-        rm -f "$staged_path"
+        rm -f "$staged_path" # SAFE: this function's own mktemp scratch file.
     fi
 
     local version
@@ -1381,7 +1381,7 @@ download_binary() {
             install_staged_binary "$staged_path" "$target_path"; then
             return 0
         fi
-        rm -f "$staged_path"
+        rm -f "$staged_path" # SAFE: this function's own mktemp scratch file.
         return 1
     fi
     local release_tag
@@ -1404,7 +1404,7 @@ download_binary() {
             log_success "Installed ${binary_name}"
             return 0
         fi
-        rm -f "$staged_path"
+        rm -f "$staged_path" # SAFE: this function's own mktemp scratch file.
         # Integrity failure is fatal, never a downgrade. The asset arrived
         # but its SHA256SUMS/attestation check did not pass; a blocked or
         # tampered checksums file must not be able to reroute the install
@@ -1415,7 +1415,7 @@ download_binary() {
         log_error "Retry later, or opt into a source build explicitly: MOLE_VERSION=main ./install.sh (piping from curl: | bash -s -- main)"
         return 1
     fi
-    rm -f "$staged_path"
+    rm -f "$staged_path" # SAFE: this function's own mktemp scratch file.
     if [[ -t 1 ]]; then stop_line_spinner; fi
 
     local fallback_tag
@@ -1433,7 +1433,7 @@ download_binary() {
                 log_success "Installed ${binary_name} from ${fallback_tag} · v${version} not yet published"
                 return 0
             fi
-            rm -f "$staged_path"
+            rm -f "$staged_path" # SAFE: this function's own mktemp scratch file.
             if [[ -t 1 ]]; then stop_line_spinner; fi
             # Same integrity contract as the primary tag above: the fallback
             # asset arrived but did not verify, which is evidence of tampering
@@ -1443,7 +1443,7 @@ download_binary() {
             log_error "Retry later, or opt into a source build explicitly: MOLE_VERSION=main ./install.sh (piping from curl: | bash -s -- main)"
             return 1
         fi
-        rm -f "$staged_path"
+        rm -f "$staged_path" # SAFE: this function's own mktemp scratch file.
         if [[ -t 1 ]]; then stop_line_spinner; fi
     fi
 
@@ -1452,7 +1452,7 @@ download_binary() {
         install_staged_binary "$staged_path" "$target_path"; then
         return 0
     fi
-    rm -f "$staged_path"
+    rm -f "$staged_path" # SAFE: this function's own mktemp scratch file.
     log_error "Failed to install ${binary_name} binary"
     log_error "Its release download from github.com did not complete, so ${binary_name} stays unavailable; run mo update again once github.com is reachable"
     return 1
@@ -1588,7 +1588,7 @@ install_files() {
     if ! download_binary "status"; then
         exit 1
     fi
-    rm -f "$helper_install_marker"
+    rm -f "$helper_install_marker" # SAFE: the marker this function wrote at its start.
 }
 
 # Verification and PATH hint

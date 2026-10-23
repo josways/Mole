@@ -408,13 +408,13 @@ remove_mole() {
             if [[ "${MOLE_TEST_MODE:-0}" == "1" || "${MOLE_TEST_NO_AUTH:-0}" == "1" ]]; then
                 log_warning "Could not remove $install: admin access is unavailable in test mode"
                 has_error=true
-            elif ! sudo rm -f "$install"; then
+            elif ! sudo rm -f "$install"; then # SAFE: a launcher _remove_is_mole_launcher just identified as Mole's.
                 log_warning "Could not remove $install"
                 has_error=true
             else
                 _remove_log_removed "$install" "launcher"
             fi
-        elif ! rm -f "$install"; then
+        elif ! rm -f "$install"; then # SAFE: a launcher _remove_is_mole_launcher just identified as Mole's.
             log_warning "Could not remove $install"
             has_error=true
         else

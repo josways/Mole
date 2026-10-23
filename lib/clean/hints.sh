@@ -42,13 +42,13 @@ hint_get_path_size_kb_with_timeout() {
     fi
 
     if [[ $du_status -ne 0 ]]; then
-        rm -f "$du_tmp"
+        rm -f "$du_tmp" # SAFE: this function's own mktemp scratch file.
         return 1
     fi
 
     local size_kb
     size_kb=$(awk 'NR==1 {print $1; exit}' "$du_tmp")
-    rm -f "$du_tmp"
+    rm -f "$du_tmp" # SAFE: this function's own mktemp scratch file.
 
     [[ "$size_kb" =~ ^[0-9]+$ ]] || return 1
     printf '%s\n' "$size_kb"
@@ -283,7 +283,7 @@ probe_project_artifact_hints() {
         if ! hint_collect_child_dirs_with_timeout "$root" "$project_dirs_file" "$list_timeout_seconds"; then
             PROJECT_ARTIFACT_HINT_SCAN_SKIPPED=true
             PROJECT_ARTIFACT_HINT_TRUNCATED=true
-            rm -f "$project_dirs_file"
+            rm -f "$project_dirs_file" # SAFE: this function's own mktemp scratch file.
             continue
         fi
 
@@ -337,7 +337,7 @@ probe_project_artifact_hints() {
             if ! hint_collect_child_dirs_with_timeout "$project_dir" "$nested_dirs_file" "$list_timeout_seconds"; then
                 PROJECT_ARTIFACT_HINT_SCAN_SKIPPED=true
                 PROJECT_ARTIFACT_HINT_TRUNCATED=true
-                rm -f "$nested_dirs_file"
+                rm -f "$nested_dirs_file" # SAFE: this function's own mktemp scratch file.
                 continue
             fi
 
@@ -372,11 +372,11 @@ probe_project_artifact_hints() {
                     fi
                 done
             done < "$nested_dirs_file"
-            rm -f "$nested_dirs_file"
+            rm -f "$nested_dirs_file" # SAFE: this function's own mktemp scratch file.
 
             [[ "$stop_scan" == "true" ]] && break
         done < "$project_dirs_file"
-        rm -f "$project_dirs_file"
+        rm -f "$project_dirs_file" # SAFE: this function's own mktemp scratch file.
 
         [[ "$stop_scan" == "true" ]] && break
     done

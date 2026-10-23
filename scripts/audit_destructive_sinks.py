@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 """Require an explicit safety justification on raw deletion commands.
 
-Covered sinks: a recursive `rm` (with or without -f, since `rm -r` deletes a
-tree as surely as `rm -rf`), `find -delete`, `defaults delete`, and a sqlite3
-call whose statement deletes or rewrites rows (DELETE FROM, DROP, VACUUM).
-Each needs `# SAFE: <one-sentence reason>` on one of its physical lines.
+Covered sinks: every `rm` in command position, recursive or not (a
+single-file `rm -f` on a path Mole did not create bypasses Trash routing and
+path protection as surely as `rm -rf`, and AGENTS.md already asks
+self-created mktemp files to carry the annotation), `find -delete`,
+`defaults delete`, and a sqlite3 call whose statement deletes or rewrites
+rows (DELETE FROM, DROP, VACUUM). Each needs `# SAFE: <one-sentence reason>`
+on one of its physical lines; a continued command may carry it on its last
+line. `rm` as an argument (`bun pm cache rm`) or a name lookup
+(`declare -F rm`) is not a call and is skipped.
 """
 
 from __future__ import annotations
@@ -23,6 +28,11 @@ DEFAULTS_DELETE = re.compile(r"(?<![A-Za-z0-9_-])defaults\s+(?:-currentHost\s+)?
 SQLITE_COMMAND = re.compile(r"(?<![A-Za-z0-9_-])sqlite3(?=\s)")
 SQL_DESTRUCTIVE = re.compile(r"\b(?:DELETE\s+FROM|DROP\s+(?:TABLE|INDEX|VIEW)|VACUUM)\b", re.IGNORECASE)
 OUTPUT_ONLY_PREFIXES = ("echo ", "echo\t", "printf ", "printf\t", "log_")
+# Words that still leave the next word in command position.
+COMMAND_PREFIXES = {
+    "sudo", "command", "exec", "xargs", "-exec", "-execdir", "then", "do", "else",
+    "elif", "if", "while", "until", "!", "env", "nice", "time", "run_with_timeout",
+}
 
 
 def default_sources() -> list[Path]:
@@ -82,6 +92,34 @@ def has_recursive_force_rm(command: str) -> bool:
         if "r" in flags or "R" in flags:
             return True
     return False
+
+
+def rm_in_command_position(command: str, match_start: int) -> bool:
+    prefix = command[:match_start].rstrip()
+    segment = re.split(r"(?:;|&&|\|\||\||\$\(|\bthen\b|\bdo\b)", prefix)[-1].split()
+    while segment and segment[0] in {"if", "elif", "while", "until", "!", "else"}:
+        segment = segment[1:]
+    # `declare -F rm`, `command -v rm`: a lookup of the name, not a call.
+    if segment and (segment[0] in {"declare", "typeset", "type", "unset", "hash", "alias", "unalias"}
+                    or segment[:2] == ["command", "-v"]):
+        return False
+    if not prefix or prefix[-1] in ";&|({`":
+        return True
+    if prefix.endswith("$("):
+        return True
+    previous = prefix.split()[-1]
+    if previous in COMMAND_PREFIXES or previous.startswith(("-", "$", '"$', "'")):
+        return True
+    # `bun pm cache rm`: rm is an argument of another command.
+    return False
+
+
+def has_any_rm(command: str) -> bool:
+    return any(
+        not is_output_only_reference(command, match.start())
+        and rm_in_command_position(command, match.start())
+        for match in RM_COMMAND.finditer(command)
+    )
 
 
 def has_defaults_delete(command: str) -> bool:
@@ -166,17 +204,18 @@ def inspect_file(path: Path) -> list[tuple[int, str]]:
         if not stripped or stripped.startswith("#"):
             continue
         recursive_rm = has_recursive_force_rm(command)
+        any_rm = recursive_rm or has_any_rm(command)
         find_delete = has_find_delete(command)
         defaults_delete = has_defaults_delete(command)
         sqlite_delete = has_destructive_sqlite(command)
-        if not (recursive_rm or find_delete or defaults_delete or sqlite_delete):
+        if not (any_rm or find_delete or defaults_delete or sqlite_delete):
             continue
-        if recursive_rm:
+        if any_rm:
             annotated = any(
                 RM_COMMAND.search(line) and SAFE_MARKER.search(line)
                 for line in physical_lines
-            )
-            kind = "raw recursive rm"
+            ) or (len(physical_lines) > 1 and bool(SAFE_MARKER.search(physical_lines[-1])))
+            kind = "raw recursive rm" if recursive_rm else "raw rm"
         elif find_delete:
             annotated = any(
                 FIND_DELETE.search(line) and SAFE_MARKER.search(line)

@@ -277,7 +277,7 @@ discover_project_cache_roots() {
                 for _pid in "${_indicator_pids[@]}"; do
                     wait "$_pid" 2> /dev/null || true
                 done
-                rm -f "$_indicator_tmp"
+                rm -f "$_indicator_tmp" # SAFE: this function's own mktemp scratch file.
                 return "$wait_rc"
             fi
             for indicator_slot in "${!_indicator_pids[@]}"; do
@@ -302,7 +302,7 @@ discover_project_cache_roots() {
     while IFS= read -r _found_dir; do
         [[ -n "$_found_dir" ]] && roots+=("$_found_dir")
     done < "$_indicator_tmp"
-    rm -f "$_indicator_tmp"
+    rm -f "$_indicator_tmp" # SAFE: this function's own mktemp scratch file.
 
     [[ ${#roots[@]} -eq 0 ]] && return 0
 
@@ -1147,7 +1147,7 @@ clean_project_caches() {
         if [[ $preflight_rc -ge 128 ]]; then
             local pending_file
             for pending_file in "${root_matches_files[@]}"; do
-                rm -f "$pending_file"
+                rm -f "$pending_file" # SAFE: this scan's own create_temp_file match lists.
             done
             return "$preflight_rc"
         fi
@@ -1158,17 +1158,17 @@ clean_project_caches() {
         local scan_rc="${scan_statuses[$scan_index]:-1}"
         if [[ $scan_rc -ne 0 ]]; then
             failed_scan_count=$((failed_scan_count + 1))
-            rm -f "$root_matches_file"
+            rm -f "$root_matches_file" # SAFE: this scan's own create_temp_file match lists.
             continue
         fi
 
         local process_rc=0
         process_project_cache_matches "$root_matches_file" || process_rc=$?
-        rm -f "$root_matches_file"
+        rm -f "$root_matches_file" # SAFE: this scan's own create_temp_file match lists.
         if [[ $process_rc -ne 0 ]]; then
             local pending_file
             for pending_file in "${root_matches_files[@]}"; do
-                rm -f "$pending_file"
+                rm -f "$pending_file" # SAFE: this scan's own create_temp_file match lists.
             done
             return "$process_rc"
         fi

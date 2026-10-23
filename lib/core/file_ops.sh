@@ -1901,9 +1901,9 @@ safe_remove_symlink() {
             log_operation "${MOLE_CURRENT_COMMAND:-clean}" "FAILED" "$path" "sudo blocked in test mode"
             return 1
         fi
-        sudo -n rm "$path" 2> /dev/null || rm_exit=$?
+        sudo -n rm "$path" 2> /dev/null || rm_exit=$? # SAFE: removes the symlink itself, never its target, after the identity checks above.
     else
-        rm "$path" 2> /dev/null || rm_exit=$?
+        rm "$path" 2> /dev/null || rm_exit=$? # SAFE: removes the symlink itself, never its target, after the identity checks above.
     fi
 
     if [[ $rm_exit -eq 0 ]]; then
@@ -3880,7 +3880,7 @@ safe_sudo_find_delete() {
                                 actual=$($stat_tool -f%d:%i:%m "$path" 2>/dev/null) || continue
                             fi
                             [ "$actual" = "$expected" ] || continue
-                            /bin/rm -f -- "$path" || exit 1
+                            /bin/rm -f -- "$path" || exit 1 # SAFE: a file re-identified by device, inode and mtime on the line above.
                             printf "%s\0" "$path"
                         done
                     ' sh "$STAT_BSD" "$age_days" > "$batch_result_file" 2> /dev/null || batch_rc=$?

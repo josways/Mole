@@ -902,7 +902,7 @@ clean_orphaned_app_data() {
         fi
         note_activity
     fi
-    rm -f "$installed_bundles"
+    rm -f "$installed_bundles" # SAFE: this function's own mktemp scratch file.
 }
 
 _privileged_helper_bundle_id_from_binary() {
@@ -2028,7 +2028,7 @@ _remove_verified_container_stub() {
     # the exact containermanagerd metadata plist, i.e. a stub with no Data/ dir
     # and no user content. rmdir (not rm -r) means a container that gains any
     # file between the check and the removal survives untouched.
-    command rm -f -- "$metadata_plist" || return 1
+    command rm -f -- "$metadata_plist" || return 1 # SAFE: the containermanagerd plist of a verified empty container stub, checked above.
     command rmdir -- "$container_dir"
 }
 

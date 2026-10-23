@@ -210,7 +210,7 @@ update_via_homebrew() {
     _mole_repair_stale_brew_entries
 
     # Clear update cache (suppress errors if cache doesn't exist or is locked)
-    rm -f "$HOME/.cache/mole/version_check" "$HOME/.cache/mole/update_message" 2> /dev/null || true
+    rm -f "$HOME/.cache/mole/version_check" "$HOME/.cache/mole/update_message" 2> /dev/null || true # SAFE: Mole's own update-check cache files under ~/.cache/mole.
 }
 
 # Remove applications from Dock

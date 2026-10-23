@@ -227,7 +227,7 @@ pkg_receipt_nonstandard_app_paths() {
             if [[ ${#seen_apps[@]} -gt 0 ]]; then
                 printf '%s\n' "${seen_apps[@]}" | sort -u >> "$cache_tmp"
             fi
-            mv -f "$cache_tmp" "$cache_file" 2> /dev/null || rm -f "$cache_tmp" 2> /dev/null || true
+            mv -f "$cache_tmp" "$cache_file" 2> /dev/null || rm -f "$cache_tmp" 2> /dev/null || true # SAFE: this function's own mktemp scratch file.
         fi
     fi
 }

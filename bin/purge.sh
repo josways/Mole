@@ -143,7 +143,7 @@ perform_purge() {
         _cleanup_done=true
 
         # Remove scanning file to stop monitor
-        rm -f "$stats_dir/purge_scanning" 2> /dev/null || true
+        rm -f "$stats_dir/purge_scanning" 2> /dev/null || true # SAFE: Mole's own purge progress file under ~/.cache/mole.
 
         if [[ -n "$monitor_pid" ]]; then
             kill "$monitor_pid" 2> /dev/null || true
@@ -261,12 +261,12 @@ perform_purge() {
 
     if [[ -f "$stats_dir/purge_stats" ]]; then
         total_size_cleaned=$(cat "$stats_dir/purge_stats" 2> /dev/null || echo "0")
-        rm -f "$stats_dir/purge_stats"
+        rm -f "$stats_dir/purge_stats" # SAFE: Mole's own purge progress file under ~/.cache/mole.
     fi
 
     if [[ -f "$stats_dir/purge_count" ]]; then
         total_items_cleaned=$(cat "$stats_dir/purge_count" 2> /dev/null || echo "0")
-        rm -f "$stats_dir/purge_count"
+        rm -f "$stats_dir/purge_count" # SAFE: Mole's own purge progress file under ~/.cache/mole.
     fi
 
     if [[ "${MOLE_DRY_RUN:-0}" == "1" ]]; then

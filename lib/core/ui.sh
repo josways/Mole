@@ -437,7 +437,7 @@ start_inline_spinner() {
             done
 
             # Clean up stop file before exiting
-            rm -f "$stop_file" 2> /dev/null || true
+            rm -f "$stop_file" 2> /dev/null || true # SAFE: the inline spinner's own control file.
             exit 0
         ) &
         INLINE_SPINNER_PID=$!
@@ -469,8 +469,8 @@ stop_inline_spinner() {
         wait "$INLINE_SPINNER_PID" 2> /dev/null || true
 
         # Cleanup
-        rm -f "$INLINE_SPINNER_STOP_FILE" 2> /dev/null || true
-        rm -f "$INLINE_SPINNER_MSG_FILE" 2> /dev/null || true
+        rm -f "$INLINE_SPINNER_STOP_FILE" 2> /dev/null || true # SAFE: the inline spinner's own control file.
+        rm -f "$INLINE_SPINNER_MSG_FILE" 2> /dev/null || true  # SAFE: the inline spinner's own control file.
         if [[ -n "$INLINE_SPINNER_CONTROL_DIR" ]]; then
             rmdir "$INLINE_SPINNER_CONTROL_DIR" 2> /dev/null || true
         fi
@@ -499,11 +499,11 @@ update_inline_spinner_message() {
     local tmp_file
     tmp_file=$(umask 077 && mktemp "$INLINE_SPINNER_CONTROL_DIR/message.XXXXXX") || return 1
     if ! printf '%s\n' "$display_message" > "$tmp_file" 2> /dev/null; then
-        rm -f "$tmp_file" 2> /dev/null || true
+        rm -f "$tmp_file" 2> /dev/null || true # SAFE: this function's own mktemp scratch file.
         return 1
     fi
     if ! mv -f "$tmp_file" "$INLINE_SPINNER_MSG_FILE" 2> /dev/null; then
-        rm -f "$tmp_file" 2> /dev/null || true
+        rm -f "$tmp_file" 2> /dev/null || true # SAFE: this function's own mktemp scratch file.
         return 1
     fi
     return 0

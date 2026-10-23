@@ -163,7 +163,7 @@ write_purge_config() {
     tmp_file=$(mktemp_file "mole-purge-paths") || return 1
 
     if ! printf '%s\n' "$header" > "$tmp_file"; then
-        rm -f "$tmp_file" 2> /dev/null || true
+        rm -f "$tmp_file" 2> /dev/null || true # SAFE: this function's own mktemp scratch file.
         return 1
     fi
 
@@ -174,14 +174,14 @@ write_purge_config() {
             # Convert $HOME to ~ for portability
             path="${path/#$HOME/~}"
             if ! printf '%s\n' "$path" >> "$tmp_file"; then
-                rm -f "$tmp_file" 2> /dev/null || true
+                rm -f "$tmp_file" 2> /dev/null || true # SAFE: this function's own mktemp scratch file.
                 return 1
             fi
         done
     fi
 
     if ! mv "$tmp_file" "$PURGE_CONFIG_FILE" 2> /dev/null; then
-        rm -f "$tmp_file" 2> /dev/null || true
+        rm -f "$tmp_file" 2> /dev/null || true # SAFE: this function's own mktemp scratch file.
         return 1
     fi
 
@@ -726,8 +726,8 @@ scan_purge_targets() {
     # root completes. Keep the caller-visible file empty until that point so a
     # timeout or read failure cannot turn a partial prefix into delete candidates.
     : > "$output_file"
-    rm -f "$target_output" "$tag_output" "$walk_output" "$processed_output" "$error_output" 2> /dev/null || true
-    [[ -z "$verified_output" ]] || rm -f "$verified_output" "${verified_output}.probes" 2> /dev/null || true
+    rm -f "$target_output" "$tag_output" "$walk_output" "$processed_output" "$error_output" 2> /dev/null || true # SAFE: this scan's sidecar outputs of the caller's mktemp output file.
+    [[ -z "$verified_output" ]] || rm -f "$verified_output" "${verified_output}.probes" 2> /dev/null || true     # SAFE: this scan's sidecar outputs of the caller's mktemp output file.
 
     # Depths below are relative to the walk path; candidates keep the depths
     # they have relative to the configured root.
@@ -796,12 +796,12 @@ scan_purge_targets() {
                 ) | filter_protected_artifacts "$deadline" "$verified_output" "$stats_dir/purge_scanning" > "$processed_output" || process_status=$?
 
             if [[ $process_status -ne 0 ]]; then
-                rm -f "$processed_output" 2> /dev/null || true
-                [[ -z "$verified_output" ]] || rm -f "$verified_output" "${verified_output}.probes" 2> /dev/null || true
+                rm -f "$processed_output" 2> /dev/null || true                                                           # SAFE: this scan's sidecar outputs of the caller's mktemp output file.
+                [[ -z "$verified_output" ]] || rm -f "$verified_output" "${verified_output}.probes" 2> /dev/null || true # SAFE: this scan's sidecar outputs of the caller's mktemp output file.
                 return "$process_status"
             fi
             if ! mv "$processed_output" "$output_file"; then
-                rm -f "$processed_output" 2> /dev/null || true
+                rm -f "$processed_output" 2> /dev/null || true # SAFE: this scan's sidecar outputs of the caller's mktemp output file.
                 return 1
             fi
         else
@@ -810,7 +810,7 @@ scan_purge_targets() {
     }
 
     cleanup_scan_outputs() {
-        rm -f "$target_output" "$tag_output" "$walk_output" "$processed_output" "$error_output" 2> /dev/null || true
+        rm -f "$target_output" "$tag_output" "$walk_output" "$processed_output" "$error_output" 2> /dev/null || true # SAFE: this scan's sidecar outputs of the caller's mktemp output file.
     }
 
     local use_find=true
@@ -1315,7 +1315,7 @@ get_dir_size_kb() {
     else
         du_exit=$?
     fi
-    rm -f "$du_tmp"
+    rm -f "$du_tmp" # SAFE: this function's own mktemp scratch file.
 
     if mole_rc_timeout "$du_exit"; then
         debug_log "Size calculation timed out (${timeout_seconds}s): $path"
@@ -2003,11 +2003,11 @@ clean_project_artifacts() {
         # Clean up temp files
         for temp in "${scan_temps[@]+"${scan_temps[@]}"}"; do
             rm -f "$temp" "${temp}.targets" "${temp}.tags" "${temp}.walk" "${temp}.processed" "${temp}.errors" \
-                "${temp}.verified" "${temp}.verified.probes" 2> /dev/null || true
+                "${temp}.verified" "${temp}.verified.probes" 2> /dev/null || true # SAFE: each scan unit's mktemp output and its sidecars.
         done
         # Clean up purge scanning file
         local stats_dir="${XDG_CACHE_HOME:-$HOME/.cache}/mole"
-        rm -f "$stats_dir/purge_scanning" 2> /dev/null || true
+        rm -f "$stats_dir/purge_scanning" 2> /dev/null || true # SAFE: Mole's own purge progress file under ~/.cache/mole.
         echo ""
         exit 130
     }
@@ -2224,12 +2224,12 @@ clean_project_artifacts() {
         done
         scan_pids=()
         local interrupted_stats_dir="${XDG_CACHE_HOME:-$HOME/.cache}/mole"
-        rm -f "$interrupted_stats_dir/purge_scanning" 2> /dev/null || true
+        rm -f "$interrupted_stats_dir/purge_scanning" 2> /dev/null || true # SAFE: Mole's own purge progress file under ~/.cache/mole.
         local interrupted_temp
         for interrupted_temp in "${scan_temps[@]+"${scan_temps[@]}"}"; do
             rm -f "$interrupted_temp" "${interrupted_temp}.targets" "${interrupted_temp}.tags" \
                 "${interrupted_temp}.walk" "${interrupted_temp}.processed" "${interrupted_temp}.errors" \
-                "${interrupted_temp}.verified" "${interrupted_temp}.verified.probes" 2> /dev/null || true
+                "${interrupted_temp}.verified" "${interrupted_temp}.verified.probes" 2> /dev/null || true # SAFE: each scan unit's mktemp output and its sidecars.
         done
         _restore_purge_scan_traps
         if [[ -t 1 ]]; then
@@ -2240,7 +2240,7 @@ clean_project_artifacts() {
 
     # Stop the scanning monitor (removes purge_scanning file to signal completion)
     local stats_dir="${XDG_CACHE_HOME:-$HOME/.cache}/mole"
-    rm -f "$stats_dir/purge_scanning" 2> /dev/null || true
+    rm -f "$stats_dir/purge_scanning" 2> /dev/null || true # SAFE: Mole's own purge progress file under ~/.cache/mole.
 
     # Give monitor process time to exit and clear its output
     if [[ -t 1 ]]; then
@@ -2314,7 +2314,7 @@ clean_project_artifacts() {
         fi
         if [[ -n "$scan_output" ]]; then
             rm -f "$scan_output" "${scan_output}.targets" "${scan_output}.tags" "${scan_output}.walk" "${scan_output}.processed" \
-                "${scan_output}.errors" "${scan_output}.verified" "${scan_output}.verified.probes" 2> /dev/null || true
+                "${scan_output}.errors" "${scan_output}.verified" "${scan_output}.verified.probes" 2> /dev/null || true # SAFE: each scan unit's mktemp output and its sidecars.
         fi
     done
     # A root binds candidates only when it is unchanged and at least one of
@@ -2334,7 +2334,7 @@ clean_project_artifacts() {
             [[ -n "$item" ]] && all_found_items+=("$item")
         done < <(LC_COLLATE=C sort -u "$dedupe_output")
     fi
-    rm -f "$dedupe_output"
+    rm -f "$dedupe_output" # SAFE: this function's own mktemp scratch file.
     # Restore caller traps after this function completes.
     _restore_purge_scan_traps
     if [[ $failed_scan_count -gt 0 ]]; then
@@ -2931,7 +2931,7 @@ clean_project_artifacts() {
             group_ranks[group_index]=$group_rank
             group_rank=$((group_rank + 1))
         done < <(sort -t'|' -k2,2nr -k1,1n "$group_sort_temp")
-        rm -f "$group_sort_temp"
+        rm -f "$group_sort_temp" # SAFE: this function's own mktemp scratch file.
 
         local item_sort_temp
         item_sort_temp=$(mktemp)
@@ -2944,7 +2944,7 @@ clean_project_artifacts() {
         while IFS='|' read -r group_rank size idx; do
             sorted_indices+=("$idx")
         done < <(sort -t'|' -k1,1n -k2,2nr -k3,3n "$item_sort_temp")
-        rm -f "$item_sort_temp"
+        rm -f "$item_sort_temp" # SAFE: this function's own mktemp scratch file.
 
         # Rebuild arrays in sorted order
         local -a sorted_menu_options=()

@@ -337,28 +337,28 @@ uninstall_persist_cache_file() {
     local dst="$2"
 
     [[ -s "$src" ]] || {
-        rm -f "$src" 2> /dev/null || true
+        rm -f "$src" 2> /dev/null || true # SAFE: the staged copy of Mole's uninstall metadata cache.
         return 0
     }
 
     # Heal stale file the user cannot write to (e.g. root-owned from a prior
     # sudo run). The parent dir is user-owned, so rm succeeds regardless.
     if [[ -e "$dst" && ! -w "$dst" ]]; then
-        rm -f "$dst" 2> /dev/null || true
+        rm -f "$dst" 2> /dev/null || true # SAFE: Mole's own uninstall metadata cache, replaced right below.
     fi
 
     # shellcheck disable=SC2217 # BSD mv/cp read stdin when prompting; close it to avoid hang.
     mv -f "$src" "$dst" < /dev/null 2> /dev/null || {
         # shellcheck disable=SC2217
         cp -f "$src" "$dst" < /dev/null 2> /dev/null || true
-        rm -f "$src" 2> /dev/null || true
+        rm -f "$src" 2> /dev/null || true # SAFE: the staged copy of Mole's uninstall metadata cache.
     }
 }
 
 start_uninstall_metadata_refresh() {
     local refresh_file="$1"
     [[ ! -s "$refresh_file" ]] && {
-        rm -f "$refresh_file" 2> /dev/null || true
+        rm -f "$refresh_file" 2> /dev/null || true # SAFE: the scan's refresh list, a sidecar of its create_temp_file.
         return 0
     }
 
@@ -469,17 +469,17 @@ start_uninstall_metadata_refresh() {
         for worker_output in "${updates_file}".*; do
             [[ -f "$worker_output" ]] || continue
             cat "$worker_output" >> "$updates_file"
-            rm -f "$worker_output"
+            rm -f "$worker_output" # SAFE: per-worker sidecars of this refresh's own updates file, merged above.
         done
 
         if [[ ! -s "$updates_file" ]]; then
-            rm -f "$updates_file"
+            rm -f "$updates_file" # SAFE: this function's own mktemp scratch file.
             exit 0
         fi
 
         if ! uninstall_acquire_metadata_lock "$MOLE_UNINSTALL_META_CACHE_LOCK"; then
             _refresh_debug "Failed to acquire lock, aborting merge"
-            rm -f "$updates_file"
+            rm -f "$updates_file" # SAFE: this function's own mktemp scratch file.
             exit 0
         fi
 
@@ -487,7 +487,7 @@ start_uninstall_metadata_refresh() {
         refresh_merged_file=$(mktemp 2> /dev/null) || {
             _refresh_debug "mktemp for merge failed, aborting"
             uninstall_release_metadata_lock "$MOLE_UNINSTALL_META_CACHE_LOCK"
-            rm -f "$updates_file"
+            rm -f "$updates_file" # SAFE: this function's own mktemp scratch file.
             exit 0
         }
 
@@ -504,8 +504,8 @@ start_uninstall_metadata_refresh() {
         uninstall_persist_cache_file "$refresh_merged_file" "$MOLE_UNINSTALL_META_CACHE_FILE"
 
         uninstall_release_metadata_lock "$MOLE_UNINSTALL_META_CACHE_LOCK"
-        rm -f "$updates_file" "$refresh_merged_file"
-        rm -f "$refresh_file" 2> /dev/null || true
+        rm -f "$updates_file" "$refresh_merged_file" # SAFE: this function's own mktemp scratch file.
+        rm -f "$refresh_file" 2> /dev/null || true   # SAFE: the scan's refresh list, a sidecar of its create_temp_file.
         # Redirect stdin from /dev/null so the perl timeout fallback does not see
         # a tty on stdin and hand the controlling terminal to its timed child.
         # This background refresh (and its nested workers, which inherit this
@@ -1197,12 +1197,12 @@ _scan_dedupe_bundle_ids() {
             }
         }
     ' "$scan_raw_file" "$scan_raw_file" > "$deduped_file"; then
-        rm -f "$deduped_file" 2> /dev/null || true
+        rm -f "$deduped_file" 2> /dev/null || true # SAFE: the dedupe sidecar of the scan's own temp file.
         return 0
     fi
 
     if ! mv "$deduped_file" "$scan_raw_file" 2> /dev/null; then
-        rm -f "$deduped_file" 2> /dev/null || true
+        rm -f "$deduped_file" 2> /dev/null || true # SAFE: the dedupe sidecar of the scan's own temp file.
     fi
 }
 
@@ -1389,13 +1389,13 @@ _scan_finalize_index() {
     update_scan_status "Sorting application list..." "0" "0"
     sort -t'|' -k1,1n "$temp_file" > "${temp_file}.sorted" || {
         stop_scan_spinner
-        rm -f "$scan_inventory_file" "$temp_file" "$scan_raw_file" "$merged_file" "$refresh_file" "$cache_snapshot_file" "$discovered_file" "$cached_rows_file" "$uncached_rows_file"
-        [[ $cache_source_is_temp == true ]] && rm -f "$cache_source" 2> /dev/null || true
+        rm -f "$scan_inventory_file" "$temp_file" "$scan_raw_file" "$merged_file" "$refresh_file" "$cache_snapshot_file" "$discovered_file" "$cached_rows_file" "$uncached_rows_file" # SAFE: the app scan's own create_temp_file files and their sidecars.
+        [[ $cache_source_is_temp == true ]] && rm -f "$cache_source" 2> /dev/null || true                                                                                             # SAFE: a create_temp_file copy of the metadata cache, only when cache_source_is_temp.
         restore_scan_int_trap
         return 1
     }
-    rm -f "$temp_file" "$scan_raw_file" "$merged_file" "$cache_snapshot_file" "$discovered_file" "$cached_rows_file" "$uncached_rows_file"
-    [[ $cache_source_is_temp == true ]] && rm -f "$cache_source" 2> /dev/null || true
+    rm -f "$temp_file" "$scan_raw_file" "$merged_file" "$cache_snapshot_file" "$discovered_file" "$cached_rows_file" "$uncached_rows_file" # SAFE: the app scan's own create_temp_file files and their sidecars.
+    [[ $cache_source_is_temp == true ]] && rm -f "$cache_source" 2> /dev/null || true                                                      # SAFE: a create_temp_file copy of the metadata cache, only when cache_source_is_temp.
 
     update_scan_status "Finalizing list..." "0" "0"
     debug_log "Uninstall finalization: metadata refresh begin (elapsed ${SECONDS}s, parent $$)"
@@ -1496,7 +1496,7 @@ scan_applications() {
         if [[ -f "$spinner_shown_file" ]]; then
             printf "\r\033[K" >&2
         fi
-        rm -f "$scan_inventory_file" "$temp_file" "$scan_raw_file" "$merged_file" "$refresh_file" "$cache_snapshot_file" "$discovered_file" "$cached_rows_file" "$uncached_rows_file" "$scan_status_file" "${temp_file}.sorted" "$spinner_shown_file" 2> /dev/null || true
+        rm -f "$scan_inventory_file" "$temp_file" "$scan_raw_file" "$merged_file" "$refresh_file" "$cache_snapshot_file" "$discovered_file" "$cached_rows_file" "$uncached_rows_file" "$scan_status_file" "${temp_file}.sorted" "$spinner_shown_file" 2> /dev/null || true # SAFE: the app scan's own create_temp_file files and their sidecars.
         exit "${1:-130}"
     }
     trap trap_scan_cleanup INT
@@ -1558,7 +1558,7 @@ scan_applications() {
                 printf "\r\033[K" >&2
             fi
         fi
-        rm -f "$spinner_shown_file" "$scan_status_file" 2> /dev/null || true
+        rm -f "$spinner_shown_file" "$scan_status_file" 2> /dev/null || true # SAFE: spinner sidecars of the scan's own temp file.
     }
 
     update_scan_status "Scanning applications..." "0" "0"
@@ -1575,7 +1575,7 @@ scan_applications() {
         _scan_stop_metadata_workers
         stop_scan_spinner
         rm -f "$scan_inventory_file" "$temp_file" "$scan_raw_file" "$merged_file" "$refresh_file" "$cache_snapshot_file" "$discovered_file" "$cached_rows_file" "$uncached_rows_file" # SAFE: exact scan scratch paths above
-        [[ $cache_source_is_temp == true ]] && rm -f "$cache_source" 2> /dev/null || true
+        [[ $cache_source_is_temp == true ]] && rm -f "$cache_source" 2> /dev/null || true                                                                                             # SAFE: a create_temp_file copy of the metadata cache, only when cache_source_is_temp.
         restore_scan_int_trap
         return "$metadata_rc"
     fi
@@ -1583,8 +1583,8 @@ scan_applications() {
     # Phase 4: bail out if discovery yielded nothing.
     if [[ ${#app_data_tuples[@]} -eq 0 && ! -s "$scan_raw_file" ]]; then
         stop_scan_spinner
-        rm -f "$scan_inventory_file" "$temp_file" "$scan_raw_file" "$merged_file" "$refresh_file" "$cache_snapshot_file" "$discovered_file" "$cached_rows_file" "$uncached_rows_file" "$scan_status_file" "${temp_file}.sorted" "$spinner_shown_file" 2> /dev/null || true
-        [[ $cache_source_is_temp == true ]] && rm -f "$cache_source" 2> /dev/null || true
+        rm -f "$scan_inventory_file" "$temp_file" "$scan_raw_file" "$merged_file" "$refresh_file" "$cache_snapshot_file" "$discovered_file" "$cached_rows_file" "$uncached_rows_file" "$scan_status_file" "${temp_file}.sorted" "$spinner_shown_file" 2> /dev/null || true # SAFE: the app scan's own create_temp_file files and their sidecars.
+        [[ $cache_source_is_temp == true ]] && rm -f "$cache_source" 2> /dev/null || true                                                                                                                                                                                  # SAFE: a create_temp_file copy of the metadata cache, only when cache_source_is_temp.
         restore_scan_int_trap
         printf "\r\033[K" >&2
         echo "No applications found to uninstall." >&2
@@ -1596,7 +1596,7 @@ scan_applications() {
         _scan_stop_metadata_workers
         stop_scan_spinner
         rm -f "$scan_inventory_file" "$temp_file" "$scan_raw_file" "$merged_file" "$refresh_file" "$cache_snapshot_file" "$discovered_file" "$cached_rows_file" "$uncached_rows_file" # SAFE: exact scan scratch paths above
-        [[ $cache_source_is_temp == true ]] && rm -f "$cache_source" 2> /dev/null || true
+        [[ $cache_source_is_temp == true ]] && rm -f "$cache_source" 2> /dev/null || true                                                                                             # SAFE: a create_temp_file copy of the metadata cache, only when cache_source_is_temp.
         restore_scan_int_trap
         return "$metadata_rc"
     fi
@@ -1607,8 +1607,8 @@ scan_applications() {
     if [[ ! -s "$scan_raw_file" ]]; then
         stop_scan_spinner
         echo "No applications found to uninstall" >&2
-        rm -f "$scan_inventory_file" "$temp_file" "$scan_raw_file" "$merged_file" "$refresh_file" "$cache_snapshot_file" "$discovered_file" "$cached_rows_file" "$uncached_rows_file" "${temp_file}.sorted" "$spinner_shown_file" 2> /dev/null || true
-        [[ $cache_source_is_temp == true ]] && rm -f "$cache_source" 2> /dev/null || true
+        rm -f "$scan_inventory_file" "$temp_file" "$scan_raw_file" "$merged_file" "$refresh_file" "$cache_snapshot_file" "$discovered_file" "$cached_rows_file" "$uncached_rows_file" "${temp_file}.sorted" "$spinner_shown_file" 2> /dev/null || true # SAFE: the app scan's own create_temp_file files and their sidecars.
+        [[ $cache_source_is_temp == true ]] && rm -f "$cache_source" 2> /dev/null || true                                                                                                                                                              # SAFE: a create_temp_file copy of the metadata cache, only when cache_source_is_temp.
         restore_scan_int_trap
         return 1
     fi
@@ -2157,7 +2157,7 @@ main() {
 
         if [[ "$reused_app_cache" != "true" ]]; then
             if [[ -n "$cached_apps_file" && -f "$cached_apps_file" ]]; then
-                rm -f "$cached_apps_file" 2> /dev/null || true
+                rm -f "$cached_apps_file" 2> /dev/null || true # SAFE: the app list an earlier scan_applications wrote to its own temp file.
             fi
 
             local scan_abort_reason=""
@@ -2169,7 +2169,7 @@ main() {
             fi
             if [[ -n "$scan_abort_reason" ]]; then
                 uninstall_abort "$scan_abort_reason"
-                rm -f "$apps_file"
+                rm -f "$apps_file" # SAFE: the app list scan_applications wrote to its own temp file.
                 [[ "$apps_file" == "$cached_apps_file" ]] && cached_apps_file=""
                 return 1
             fi
@@ -2190,7 +2190,7 @@ main() {
 
         debug_log "Uninstall list load begin (elapsed ${SECONDS}s, parent $$)"
         if ! load_applications "$apps_file"; then
-            rm -f "$apps_file"
+            rm -f "$apps_file" # SAFE: the app list scan_applications wrote to its own temp file.
             [[ "$apps_file" == "$cached_apps_file" ]] && cached_apps_file=""
             uninstall_abort "no applications available for uninstallation"
             return 1
@@ -2213,7 +2213,7 @@ main() {
         set -e
 
         if [[ $exit_code -ne 0 ]]; then
-            rm -f "$apps_file"
+            rm -f "$apps_file" # SAFE: the app list scan_applications wrote to its own temp file.
             [[ "$apps_file" == "$cached_apps_file" ]] && cached_apps_file=""
             if [[ "${_MOLE_MENU_USER_QUIT:-0}" == "1" ]]; then
                 # A deliberate q is a cancel, not a failure: leave quietly
