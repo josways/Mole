@@ -2,6 +2,8 @@ module github.com/tw93/mole
 
 go 1.26.0
 
+toolchain go1.26.10
+
 require (
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/charmbracelet/bubbletea v1.3.10

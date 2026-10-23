@@ -29,7 +29,13 @@
         system: _pkgs:
         inputs.self.packages.${system}
         // {
-          formatting = inputs.self.formatter.${system}.check inputs.self;
+          # go.mod names toolchain go1.26.10, which goimports would try to
+          # download; the build sandbox has no network, so use nixpkgs' Go.
+          formatting = (inputs.self.formatter.${system}.check inputs.self).overrideAttrs (old: {
+            env = (old.env or { }) // {
+              GOTOOLCHAIN = "local";
+            };
+          });
         }
       ) darwinPackages;
 
