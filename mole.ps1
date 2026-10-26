@@ -210,7 +210,7 @@ function Show-MainMenu {
     Write-Host -NoNewline "$esc[?25l"
     try {
         while ($true) {
-            Clear-Host
+            Clear-MoleScreen
             Write-Host ""
             Show-Banner
             for ($i = 0; $i -lt $items.Count; $i++) {
@@ -467,7 +467,7 @@ function Main {
 
     # Interactive mode, as on macOS: pick once, run it, return to the shell.
     $choice = Show-MainMenu -UpdateContext $updateContext
-    Clear-Host
+    Clear-MoleScreen
     if ($null -eq $choice) {
         return
     }

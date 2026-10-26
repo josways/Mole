@@ -272,7 +272,7 @@ function Get-FreeSpace {
     #>
     param([string]$Drive = $env:SystemDrive)
     
-    $disk = Get-WmiObject Win32_LogicalDisk -Filter "DeviceID='$Drive'" -ErrorAction SilentlyContinue
+    $disk = Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DeviceID='$Drive'" -ErrorAction SilentlyContinue
     if ($disk) {
         return Format-ByteSize -Bytes $disk.FreeSpace
     }
@@ -285,7 +285,7 @@ function Get-WindowsVersion {
         Get Windows version information
     #>
     try {
-        $os = Get-WmiObject Win32_OperatingSystem -ErrorAction Stop
+        $os = Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction Stop
         return @{
             Name    = $os.Caption
             Version = $os.Version

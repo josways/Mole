@@ -295,6 +295,7 @@ Describe 'Native File launcher routing' {
         function Show-Version {}
         function Show-MainHelp {}
         function Show-MainMenu { return $null }
+        function Clear-MoleScreen {}
         function Invoke-MoleCommand { param($CommandName, $Arguments) }
     }
     BeforeEach {
@@ -307,7 +308,7 @@ Describe 'Native File launcher routing' {
         Mock Show-Version {}
         Mock Show-MainHelp {}
         Mock Show-MainMenu { return $null }
-        Mock Clear-Host {}
+        Mock Clear-MoleScreen {}
         Mock Invoke-MoleCommand {}
     }
     It 'Handles root long help passed through remaining arguments' {

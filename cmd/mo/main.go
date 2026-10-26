@@ -9,6 +9,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -30,17 +31,13 @@ func run(args []string) int {
 	// The console sends Ctrl+C to PowerShell as well; let it decide.
 	signal.Ignore(os.Interrupt)
 
-	cmd := exec.Command(powerShellPath(), "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", commandLine(script, args))
-	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
-	if err := cmd.Run(); err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
-			return exitErr.ExitCode()
-		}
-		fmt.Fprintf(os.Stderr, "mo: could not start PowerShell: %v\n", err)
+	psArgs := []string{"-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", commandLine(script, args)}
+	code, err := runPowerShell(powerShellCandidates(), psArgs, os.Stdin, os.Stdout, os.Stderr)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "mo: %v\n", err)
 		return 1
 	}
-	return 0
+	return code
 }
 
 // scriptPath resolves mole.ps1 beside the real executable; winget runs this
@@ -60,14 +57,46 @@ func scriptPath() (string, error) {
 	return script, nil
 }
 
-// powerShellPath is the absolute Windows PowerShell path, so a powershell.exe
-// earlier on PATH is never picked up instead.
-func powerShellPath() string {
+// powerShellCandidates lists the PowerShell hosts to try, in order. Windows
+// PowerShell is the supported target; pwsh is a fallback for machines where
+// policy blocks powershell.exe (AppLocker, SRP).
+func powerShellCandidates() []string {
+	candidates := []string{windowsPowerShellPath()}
+	if pwsh, err := exec.LookPath("pwsh.exe"); err == nil {
+		candidates = append(candidates, pwsh)
+	}
+	return candidates
+}
+
+// windowsPowerShellPath is the absolute Windows PowerShell path, so a
+// powershell.exe earlier on PATH is never picked up instead.
+func windowsPowerShellPath() string {
 	root := os.Getenv("SystemRoot")
 	if root == "" {
 		root = `C:\Windows`
 	}
 	return filepath.Join(root, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
+}
+
+// runPowerShell starts the first host that can be started. A host failure
+// after its process starts is returned as an exit code and never retried on
+// another host, so a command cannot run twice.
+func runPowerShell(candidates []string, args []string, stdin io.Reader, stdout, stderr io.Writer) (int, error) {
+	var failures []string
+	for _, path := range candidates {
+		cmd := exec.Command(path, args...)
+		cmd.Stdin, cmd.Stdout, cmd.Stderr = stdin, stdout, stderr
+		err := cmd.Run()
+		if err == nil {
+			return 0, nil
+		}
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return exitErr.ExitCode(), nil
+		}
+		failures = append(failures, err.Error())
+	}
+	return 1, fmt.Errorf("could not start PowerShell:\n  %s", strings.Join(failures, "\n  "))
 }
 
 // commandLine builds `& 'script' 'arg' ...; exit $LASTEXITCODE` with every

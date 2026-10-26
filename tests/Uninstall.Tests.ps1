@@ -94,7 +94,7 @@ Describe "Uninstall selection under strict mode" {
     }
 
     BeforeEach {
-        Mock Clear-Host {}
+        Mock Clear-MoleScreen {}
         Mock Write-Host {}
         Mock Write-Info {}
         Mock Write-MoleWarning {}
@@ -822,7 +822,7 @@ Describe "Scanning installed apps" {
 
 Describe "Selecting apps that share a name" {
     BeforeEach {
-        Mock Clear-Host {}
+        Mock Clear-MoleScreen {}
         Mock Write-Host {}
         $script:MenuKeys = @("Spacebar", "Enter")
         $script:MenuKeyIndex = 0
@@ -993,7 +993,7 @@ Describe 'Store display sizes without deletion authority' {
 
 Describe 'Uninstall rendered regression' {
     It 'keeps Chinese and ASCII menu sizes on the same display column' {
-        Mock Clear-Host {}
+        Mock Clear-MoleScreen {}
         Mock Get-TerminalSize { @{Width=80;Height=24} }
         Mock Read-MenuKey { [pscustomobject]@{Key='Q'; KeyChar='q'} }
         $script:RenderedRows = @()
@@ -1010,7 +1010,7 @@ Describe 'Uninstall rendered regression' {
     }
 
     It 'selects the only app a search matches' {
-        Mock Clear-Host {}
+        Mock Clear-MoleScreen {}
         Mock Write-Host {}
         Mock Get-TerminalSize { @{Width=80;Height=24} }
         Mock Read-Host { 'Clash' }
@@ -1096,7 +1096,7 @@ Describe "mo uninstall --list" {
     BeforeEach {
         Mock Test-UninstallListAsJson { $true }
         Mock Get-InstalledApplications { @($script:ListRegistryApp, $script:ListStoreApp) }
-        Mock Clear-Host { throw "--list must not clear the screen" }
+        Mock Clear-MoleScreen { throw "--list must not clear the screen" }
         Mock Show-AppSelectionMenu { throw "--list must not open the menu" }
         Mock Read-Host { throw "--list must not prompt" }
         Mock Uninstall-SelectedApps { throw "--list must not uninstall" }
@@ -1180,7 +1180,7 @@ Describe "mo uninstall --list" {
         }
         finally { $DryRun = $false }
 
-        Should -Invoke Clear-Host -Times 0 -Exactly
+        Should -Invoke Clear-MoleScreen -Times 0 -Exactly
     }
 
     It "Prints an aligned table on a console and nothing to the pipeline" {

@@ -75,13 +75,13 @@ function Get-SystemHealth {
     $health = @{}
 
     # Memory info
-    $os = Get-WmiObject Win32_OperatingSystem
+    $os = Get-CimInstance -ClassName Win32_OperatingSystem
     $health.MemoryTotalGB = [Math]::Round($os.TotalVisibleMemorySize / 1MB, 1)
     $health.MemoryUsedGB = [Math]::Round(($os.TotalVisibleMemorySize - $os.FreePhysicalMemory) / 1MB, 1)
     $health.MemoryUsedPercent = [Math]::Round((($os.TotalVisibleMemorySize - $os.FreePhysicalMemory) / $os.TotalVisibleMemorySize) * 100, 0)
 
     # Disk info
-    $disk = Get-WmiObject Win32_LogicalDisk -Filter "DeviceID='$env:SystemDrive'"
+    $disk = Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DeviceID='$env:SystemDrive'"
     $health.DiskTotalGB = [Math]::Round($disk.Size / 1GB, 0)
     $health.DiskUsedGB = [Math]::Round(($disk.Size - $disk.FreeSpace) / 1GB, 0)
     $health.DiskUsedPercent = [Math]::Round((($disk.Size - $disk.FreeSpace) / $disk.Size) * 100, 0)
@@ -91,7 +91,7 @@ function Get-SystemHealth {
     $health.UptimeDays = [Math]::Round($uptime.TotalDays, 1)
 
     # CPU info
-    $cpu = Get-WmiObject Win32_Processor
+    $cpu = Get-CimInstance -ClassName Win32_Processor
     $health.CPUName = $cpu.Name
     $health.CPUCores = $cpu.NumberOfLogicalProcessors
 
@@ -622,7 +622,7 @@ function Main {
     $script:DryRun = $DryRun -or ($env:MOLE_DRY_RUN -eq '1')
 
     # Clear screen
-    Clear-Host
+    Clear-MoleScreen
 
     $esc = [char]27
     Write-Host ""

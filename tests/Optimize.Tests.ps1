@@ -62,7 +62,7 @@ Describe "mo optimize steps" {
         $env:ProgramData = Join-Path $TestDrive "ProgramData"
 
         Mock Test-IsAdmin { $true }
-        Mock Clear-Host { }
+        Mock Clear-MoleScreen { }
         Mock Read-Host { "n" }
         Mock Get-CimInstance { @() }
         Mock Get-SystemHealth { @{ MemoryUsedGB = 1; MemoryTotalGB = 2; DiskUsedGB = 1; DiskTotalGB = 2; UptimeDays = 1 } }

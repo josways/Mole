@@ -16,6 +16,19 @@ BeforeAll {
     . "$script:LibDir\core\tui_binaries.ps1"
 }
 
+Describe "PowerShell host compatibility" {
+    It "Does not use Get-WmiObject, which re-invokes powershell.exe under PowerShell 7" {
+        $files = @(
+            Get-ChildItem -Path (Join-Path $script:WindowsDir "lib"), (Join-Path $script:WindowsDir "bin") -Filter *.ps1 -File -Recurse
+            Get-Item -LiteralPath (Join-Path $script:WindowsDir "mole.ps1")
+        )
+        $offenders = @($files | Where-Object {
+                (Get-Content -LiteralPath $_.FullName -Raw) -match '(?i)\bGet-WmiObject\b'
+            } | ForEach-Object { $_.FullName })
+        $offenders | Should -BeNullOrEmpty
+    }
+}
+
 Describe "Base Module" {
     Context "Color Definitions" {
         It "Should define color codes" {

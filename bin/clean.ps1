@@ -171,7 +171,7 @@ function Start-Cleanup {
     $esc = [char]27
 
     # Clear screen
-    Clear-Host
+    Clear-MoleScreen
     Write-Host ""
     Write-Host "$esc[1;35mClean Your Windows$esc[0m"
     Write-Host ""

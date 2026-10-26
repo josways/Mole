@@ -471,7 +471,7 @@ function Show-ProjectSelectionMenu {
 
     try {
         while ($true) {
-            Clear-Host
+            Clear-MoleScreen
 
             # Header
             Write-Host ""
@@ -683,7 +683,7 @@ function Main {
     }
 
     # Clear screen
-    Clear-Host
+    Clear-MoleScreen
 
     $esc = [char]27
     Write-Host ""
@@ -728,7 +728,7 @@ function Main {
     }
 
     # Confirm
-    Clear-Host
+    Clear-MoleScreen
     Write-Host ""
     $selectedSize = ($selected | Measure-Object -Property TotalSizeKB -Sum).Sum
     if ($null -eq $selectedSize) { $selectedSize = 0 }

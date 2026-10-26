@@ -10,6 +10,7 @@ BeforeAll {
     function Get-SystemHealth { @{} }
     function Start-Spinner { param($Message) }
     function Stop-Spinner {}
+    function Clear-MoleScreen {}
     function Show-SystemHealth { param($Health) }
     function Optimize-DiskDrive {}
     function Clear-DnsCache {}
@@ -26,7 +27,7 @@ Describe 'Environment dry-run at command entrypoints' {
         $script:SavedDryRun=$env:MOLE_DRY_RUN
         $DebugMode=$false; $ShowHelp=$false; $Whitelist=$false; $System=$false; $GameMedia=$false; $GpuShaders=$false
         $script:Icons=@{DryRun='preview'}
-        Mock Clear-Host {}
+        Mock Clear-MoleScreen {}
     }
     AfterEach { $env:MOLE_DRY_RUN=$script:SavedDryRun }
     It 'Keeps environment-only clean in preview mode' {
@@ -74,14 +75,14 @@ Describe 'GPU shader caches wait for --gpu-shaders' {
         $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $script:Root 'bin\clean.ps1'),[ref]$null,[ref]$null)
         $flow = $ast.Find({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Start-Cleanup'},$true)
         Set-Item function:script:Invoke-CleanFlow ([scriptblock]::Create($flow.Body.Extent.Text.TrimStart('{').TrimEnd('}')))
-        foreach ($name in 'Get-WindowsVersion','Get-FreeSpace','Reset-CleanupStats','Set-DryRunMode','Invoke-UserCleanup','Clear-BrowserCaches','Clear-GPUShaderCaches','Clear-AppCaches','Invoke-DevToolsCleanup','Invoke-AppCleanup','Invoke-SystemCleanup','Get-CleanupStats','Show-CleanupSummary','Write-MoleError') {
+        foreach ($name in 'Clear-MoleScreen','Get-WindowsVersion','Get-FreeSpace','Reset-CleanupStats','Set-DryRunMode','Invoke-UserCleanup','Clear-BrowserCaches','Clear-GPUShaderCaches','Clear-AppCaches','Invoke-DevToolsCleanup','Invoke-AppCleanup','Invoke-SystemCleanup','Get-CleanupStats','Show-CleanupSummary','Write-MoleError') {
             Set-Item "function:script:$name" {}
         }
     }
     BeforeEach {
         $script:Icons=@{Solid='-';Admin='-';Success='-'}
         $script:CurrentSection=@{Active=$true}
-        Mock Clear-Host {}
+        Mock Clear-MoleScreen {}
         Mock Get-WindowsVersion { [pscustomobject]@{Name='Windows'} }
         Mock Clear-GPUShaderCaches {}
         Mock Invoke-UserCleanup {}

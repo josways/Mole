@@ -8,6 +8,10 @@ Windows PowerShell 5.1 can return no item for a missing `.git` path without the 
 
 Git for Windows rejects `GIT_CONFIG_GLOBAL=NUL` in the tested configuration; the isolated purge process uses `/dev/null`. Preserve its Git environment isolation, literal case-insensitive pathspecs and explicit UTF-8 output decoding. Test a tracked artifact and an eligible untracked artifact under the same bracket-containing path. A test that only expects zero candidates can pass because discovery is entirely broken. [PurgeBoundary.Tests.ps1](../tests/PurgeBoundary.Tests.ps1) includes these controls, Unicode paths and inherited index/pathspec overrides.
 
+## PowerShell host selection
+
+PowerShell 7 implements `Get-WmiObject` through implicit remoting into Windows PowerShell, so the call starts `powershell.exe`; when policy blocks that executable, the cmdlet fails even though `pwsh` itself runs. Use `Get-CimInstance` in runtime scripts. `mo.exe` prefers Windows PowerShell and falls back to `pwsh.exe` only when a host cannot be started; retrying after a host starts could run a deletion command twice. PowerShell 7 also throws "The handle is invalid" when `Clear-Host` runs with redirected output, so entrypoints clear through `Clear-MoleScreen`. [Core.Tests.ps1](../tests/Core.Tests.ps1) guards the WMI ban and [cmd/mo/main_test.go](../cmd/mo/main_test.go) covers the host boundary.
+
 ## CMD launchers and PowerShell binding
 
 Do not turn paths or arguments into interpolated PowerShell source. The generated launcher uses `DisableDelayedExpansion` and native `-File` argument forwarding. Its `(goto)` transfer also supports removing the running batch file; changing that sequence can lose scoped environment variables, report a missing batch file or overwrite the child's exit status.

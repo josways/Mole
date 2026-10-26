@@ -992,7 +992,7 @@ function Show-AppSelectionMenu {
 
     try {
         while ($true) {
-            Clear-Host
+            Clear-MoleScreen
 
             # Header
             Write-Host ""
@@ -1408,7 +1408,7 @@ function Main {
     }
 
     # Clear screen
-    Clear-Host
+    Clear-MoleScreen
 
     # Get installed apps
     $apps = @(Get-InstalledApplications -ForceRescan:$Rescan)
@@ -1430,7 +1430,7 @@ function Main {
 
     # Confirm uninstall
     $esc = [char]27
-    Clear-Host
+    Clear-MoleScreen
     Write-Host ""
     if ($script:MoleDryRunMode) {
         Write-Host "$esc[33mDry run: the following applications would be uninstalled:$esc[0m"

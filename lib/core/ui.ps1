@@ -33,6 +33,16 @@ function Get-TerminalSize {
     }
 }
 
+# PowerShell 7 throws "The handle is invalid" when Clear-Host runs with
+# redirected output. A preview written to a file or pipe must still run.
+function Clear-MoleScreen {
+    try {
+        if ([Console]::IsOutputRedirected) { return }
+        Clear-Host
+    }
+    catch { }
+}
+
 # Measure terminal cells, not UTF-16 length. ConsoleHost's own width helper
 # counts CJK as one cell on Windows, so it cannot align mixed-language rows.
 function Get-TerminalTextWidth {
